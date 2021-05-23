@@ -1,0 +1,23 @@
+name: snapshot
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+
+jobs:
+  generate_snapshot:
+    name: generate snapshot
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: checkout 
+        uses: actions/checkout@v2
+        with:
+          repo-token: "${{ secrets.GITHUB_TOKEN }}"
+          tag: "snapshot"
