@@ -1,4 +1,3 @@
-from torch._C import channels_last
 from utils.creator_tool import ProposalCreator
 from torch.nn import functional as F
 import torch
