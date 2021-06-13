@@ -102,7 +102,7 @@ class ProposalCreator:
         keep = torch.where((hs > min_size) & (ws > min_size))
         roi, score = roi[keep, :], score[keep]
 
-        order = score.ravel().argsort()[::-1]  # largs -> small
+        order = score.flatten().argsort()[::-1]  # largs -> small
         if n_pre_nms > 0:
             order = order[:n_pre_nms]
         roi, score = roi[order, :], score[order]

@@ -52,7 +52,7 @@ def _enumerate_shifted_anchor(anchor_base: torch.Tensor, feat_stride, height, wi
     shift_y = torch.arange(0, height * feat_stride, feat_stride)
     shift_x = torch.arange(0, width * feat_stride, feat_stride)
     shift_x, shift_y = torch.meshgrid(shift_x, shift_y)
-    shift = torch.stack((shift_y.ravel(), shift_x.ravel(), shift_y.ravel(), shift_x.ravel()), dim=1)
+    shift = torch.stack((shift_y.flatten(), shift_x.flatten(), shift_y.flatten(), shift_x.flatten()), dim=1)
 
     A = anchor_base.shape[0]
     K = shift.shape[0]

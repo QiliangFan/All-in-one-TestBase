@@ -1,5 +1,5 @@
 import torch
-
+import math
 
 def generate_anchor_base(base_size=16, ratios=[0.5, 1, 2], anchor_scales=[8, 16, 32]):
     cy, cx = base_size / 2, base_size / 2
@@ -9,8 +9,8 @@ def generate_anchor_base(base_size=16, ratios=[0.5, 1, 2], anchor_scales=[8, 16,
     for i in range(len(ratios)):
         for j in range(len(anchor_scales)):
             h = base_size * anchor_scales[j] * \
-                torch.sqrt(ratios[i])  # 这里不加sqrt也行
-            w = base_size * anchor_scales[j] * torch.sqrt(1 / ratios[i])
+                math.sqrt(ratios[i])  # 这里不加sqrt也行
+            w = base_size * anchor_scales[j] * math.sqrt(1 / ratios[i])
 
             index = i * len(anchor_scales) + j
             anchor_base[index, 0] = cy - h / 2

@@ -1,6 +1,3 @@
-import cv2
-from PIL import Image 
+import pydicom
 
-Image.fromarray()
-
-cv2.rectan
+dcm = pydicom.read_file("").
