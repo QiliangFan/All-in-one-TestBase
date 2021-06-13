@@ -66,7 +66,7 @@ def bbox2loc(src_bbox: torch.Tensor, dst_bbox: torch.Tensor):
     dh = torch.log(base_height / height)
     dw = torch.log(base_width / width)
 
-    loc = torch.stack([dy, dx, dh, dw], dim=1)
+    loc = torch.stack([dy, dx, dh, dw], dim=1) 
     return loc
 
 
@@ -80,6 +80,7 @@ def bbox_iou(bbox_a: torch.Tensor, bbox_b: torch.Tensor):
 
     area_inter = torch.prod(bottom_right - top_left, dim=2) * \
         (top_left < bottom_right).all(dim=2)
-    area_a = torch.prod(bbox_a[:, 2:] - bbox_b[:, :2], dim=1)
+    area_a = torch.prod(bbox_a[:, 2:] - bbox_a[:, :2], dim=1)
     area_b = torch.prod(bbox_b[:, 2:] - bbox_b[:, :2], dim=1)
-    return area_inter / (area_a[:, None] + area_b - area_inter)
+    area_union = area_a[:, None] + area_b
+    return area_inter / (area_union - area_inter)

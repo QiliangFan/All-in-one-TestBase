@@ -32,28 +32,29 @@ class ProposalTargetCreator:
     def __call__(self, roi: torch.Tensor, bbox: torch.Tensor, label: torch.Tensor, loc_normalize_mean=(0., 0., 0., 0.), loc_normalize_std=(0.1, 0.1, 0.2, 0.2)):
         n_bbox, _ = bbox.shape
 
-        # 这行代码有啥用?????
-        # roi = torch.cat((roi, bbox), dim=0)
+        gt_roi_label = torch.zeros((roi.shape[0],))
 
-        pos_roi_per_image = torch.round(self.n_sample * self.pos_ratio)
+        pos_roi_per_image = torch.round(
+            torch.as_tensor(self.n_sample * self.pos_ratio))
         iou = bbox_iou(roi, bbox)
         gt_assignment = iou.argmax(dim=1)
-        max_iou = iou.max(dim=1)  # 每个roi对应的最大的IOU
-
-        # Offset range of classes from [0, n_fg_class-1] -> [1, n_fg_class], 0 作为background
-        # 为每个roi分配一个bbox对应的类, 并且class+1, 进行偏移
-        gt_roi_label = label[gt_assignment] + 1
+        max_iou = iou.max(dim=1).values  # 每个roi对应的最大的IOU
 
         pos_index = torch.where(max_iou >= self.pos_iou_thresh)[0]
         pos_roi_per_this_image = int(
             min(pos_roi_per_image.item(), len(pos_index)))
         if len(pos_index) > 0:
-            pos_index = random.sample(pos_index.tolist(), pos_roi_per_this_image)
-        
-        neg_index = torch.where((max_iou < self.neg_iou_thresh_hi) & (self.neg_iou_thresh_lo <= max_iou))[0]
+            pos_index = random.sample(
+                pos_index.tolist(), pos_roi_per_this_image)
+        gt_roi_label[pos_index] = 1
+
+        neg_index = torch.where((max_iou < self.neg_iou_thresh_hi) & (
+            self.neg_iou_thresh_lo <= max_iou))[0]
         neg_roi_per_this_image = self.n_sample - pos_roi_per_this_image
         if len(neg_index) > 0:
-            neg_index = random.sample(neg_index.tolist(), neg_roi_per_this_image)
+            neg_index = random.sample(
+                neg_index.tolist(), neg_roi_per_this_image)
+        gt_roi_label[neg_index] = 1
 
         keep_index = pos_index + neg_index
         gt_roi_label = gt_roi_label[keep_index]
@@ -61,9 +62,11 @@ class ProposalTargetCreator:
         sample_roi = roi[keep_index]
 
         gt_roi_loc = bbox2loc(sample_roi, bbox[gt_assignment[keep_index]])
-        gt_roi_loc = (gt_roi_loc - torch.as_tensor(loc_normalize_mean, dtype=torch.float32)) / torch.as_tensor(loc_normalize_std, dtype=torch.float32)
+        gt_roi_loc = (gt_roi_loc - torch.as_tensor(loc_normalize_mean, dtype=torch.float32, device=gt_roi_loc.device)
+                      ) / torch.as_tensor(loc_normalize_std, dtype=torch.float32, device=gt_roi_loc.device)
 
         return sample_roi, gt_roi_loc, gt_roi_label
+
 
 class ProposalCreator:
     def __init__(self,
@@ -99,10 +102,10 @@ class ProposalCreator:
         min_size = self.min_size * scale
         hs = roi[:, 3] - roi[:, 1]
         ws = roi[:, 2] - roi[:, 0]
-        keep = torch.where((hs > min_size) & (ws > min_size))
+        keep = torch.where((hs > min_size) & (ws > min_size))[0]
         roi, score = roi[keep, :], score[keep]
 
-        order = score.flatten().argsort()[::-1]  # largs -> small
+        order = score.flatten().argsort().flip(dims=[0])  # largs -> small
         if n_pre_nms > 0:
             order = order[:n_pre_nms]
         roi, score = roi[order, :], score[order]
@@ -150,7 +153,6 @@ class AnchorTargetCreator:
         loc = _unmap(loc, n_anchor, inside_index, fill=0)
 
         return loc, label
-
 
     def _create_label(self, inside_index, anchor: torch.Tensor, bbox: torch.Tensor):
         # label: 1 is positive, 0 is negative, -1 is don't care
@@ -218,6 +220,7 @@ def _get_inside_index(anchor: torch.Tensor, H, W):
         (anchor[:, 3] <= W)
     )[0]
     return index_inside
+
 
 def _unmap(data: torch.Tensor, count, index, fill=0):
     if len(data.shape) == 1:

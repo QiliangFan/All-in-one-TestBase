@@ -4,7 +4,7 @@ import pandas as pd
 from typing import List, Tuple
 from glob import glob
 import os
-import pydicom
+import SimpleITK as sitk
 import torch
 import numpy as np
 
@@ -14,62 +14,76 @@ def parse_label(v: str) -> Tuple[List, List]:
         return [0], []
     else:
         b = v.split("opacity")
-        b = [list(map(lambda x: float(x), i.strip().split(" "))) for i in b if len(i)]
-        return [1], b
+        b = [list(map(lambda x: float(x), i.strip().split(" ")))[1:] for i in b if len(i)]
+        res = []
+        for vec in b:
+            res.append([vec[1], vec[0], vec[3], vec[2]])
+        return [1], res
+
 
 class ImageData(Dataset):
-    
+
     def __init__(self, data_root: str, csv: str = None):
         super().__init__()
         self.data_root = data_root
         self.csv = csv
 
         if self.csv is not None:
-            dt = pd.read_csv(self.csv)  
-            self.ids = dt["id"].apply(lambda v: v.replace("_image", ""))
-            self.bboxes = dt["boxes"].apply(lambda v: v.replace("'", "\"") if isinstance(v, str) else v)
-            self.labels = dt["label"]
-            self.study_instances = dt["StudyInstanceUID"]
+            dt = pd.read_csv(self.csv)
+            dt = dt[~dt["label"].str.contains("none")]
+            self.ids = dt["id"].apply(lambda v: v.replace("_image", "")).values
+            self.bboxes = dt["boxes"].apply(lambda v: v.replace(
+                "'", "\"") if isinstance(v, str) else v).values
+            self.labels = dt["label"].values
+            self.study_instances = dt["StudyInstanceUID"].values
+
         else:
-            self.files = glob(os.path.join(self.data_root, "**", "*.dcm"), recursive=True)
+            self.files = glob(os.path.join(
+                self.data_root, "**", "*.dcm"), recursive=True)
 
     def __getitem__(self, idx: int):
         if self.csv is not None:
+            print(idx, len(self.ids), "======")
             _id = self.ids[idx]
             _bbox = self.bboxes[idx]
             _label = self.labels[idx]
             _study_instance = self.study_instances[idx]
 
             label, bboxs = parse_label(_label)
-            img_path = glob(os.path.join(self.data_root, "**", f"{_study_instance}", "**", f"{_id}.dcm"), recursive=True)[0]
-            img = pydicom.read_file(img_path).pixel_array.astype(np.float32)[None, :]
+            img_path = glob(os.path.join(
+                self.data_root, "**", f"{_study_instance}", "**", f"{_id}.dcm"), recursive=True)[0]
+            img: np.ndarray = sitk.GetArrayFromImage(
+                sitk.ReadImage(img_path)).astype(np.float32)
+            img = (img - img.min()) / (img.max() - img.min())
 
-            
             return torch.as_tensor(img), torch.as_tensor(bboxs), torch.as_tensor(label), 1
         else:
             img_path = self.files[idx]
-            img = pydicom.read_file(img_path).pixel_array.astype(np.float32)[None, :]
-            
+            img: np.ndarray = sitk.GetArrayFromImage(
+                sitk.ReadImage(img_path)).astype(np.float32)
+            img = (img - img.min()) / (img.max() - img.min())
+
             return torch.as_tensor(img), 1
 
     def __len__(self):
-        if self.csv:
+        if self.csv is not None:
             return len(self.ids)
         else:
             return len(self.files)
 
+
 class ImageLevelData(LightningDataModule):
 
-    def __init__(self, data_root: str, img_label_csv: str):
+    def __init__(self, train_data_root: str, img_label_csv: str):
         super().__init__()
 
-        self.train_data = ImageData(data_root, img_label_csv)
-        self.test_data = ImageData(data_root)
+        self.train_data = ImageData(train_data_root, img_label_csv)
+        self.test_data = ImageData(train_data_root)
 
     def prepare_data(self):
         pass
 
-    def setup(self, stage: str):  
+    def setup(self, stage: str):
         """[summary]
 
         Args:
