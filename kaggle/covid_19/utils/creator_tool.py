@@ -32,7 +32,7 @@ class ProposalTargetCreator:
     def __call__(self, roi: torch.Tensor, bbox: torch.Tensor, label: torch.Tensor, loc_normalize_mean=(0., 0., 0., 0.), loc_normalize_std=(0.1, 0.1, 0.2, 0.2)):
         n_bbox, _ = bbox.shape
 
-        gt_roi_label = torch.zeros((roi.shape[0],))
+        gt_roi_label = torch.zeros((roi.shape[0],), device=roi.device)
 
         pos_roi_per_image = torch.round(
             torch.as_tensor(self.n_sample * self.pos_ratio))
@@ -43,7 +43,7 @@ class ProposalTargetCreator:
         pos_index = torch.where(max_iou >= self.pos_iou_thresh)[0]
         pos_roi_per_this_image = int(
             min(pos_roi_per_image.item(), len(pos_index)))
-        if len(pos_index) > 0:
+        if len(pos_index) > pos_roi_per_this_image:
             pos_index = random.sample(
                 pos_index.tolist(), pos_roi_per_this_image)
         gt_roi_label[pos_index] = 1
@@ -51,12 +51,13 @@ class ProposalTargetCreator:
         neg_index = torch.where((max_iou < self.neg_iou_thresh_hi) & (
             self.neg_iou_thresh_lo <= max_iou))[0]
         neg_roi_per_this_image = self.n_sample - pos_roi_per_this_image
-        if len(neg_index) > 0:
+        if len(neg_index) > neg_roi_per_this_image:
             neg_index = random.sample(
                 neg_index.tolist(), neg_roi_per_this_image)
         gt_roi_label[neg_index] = 1
 
-        keep_index = pos_index + neg_index
+        keep_index = torch.cat([torch.as_tensor(pos_index).to(device=roi.device), torch.as_tensor(
+            neg_index).to(device=roi.device)]).to(device=roi.device)
         gt_roi_label = gt_roi_label[keep_index]
         gt_roi_label[pos_roi_per_this_image:] = 0  # 0 -> background
         sample_roi = roi[keep_index]
@@ -154,9 +155,10 @@ class AnchorTargetCreator:
 
         return loc, label
 
-    def _create_label(self, inside_index, anchor: torch.Tensor, bbox: torch.Tensor):
+    def _create_label(self, inside_index: torch.Tensor, anchor: torch.Tensor, bbox: torch.Tensor):
         # label: 1 is positive, 0 is negative, -1 is don't care
-        label = torch.empty((len(inside_index),), dtype=torch.int32)
+        label = torch.empty((len(inside_index),),
+                            dtype=torch.int32, device=anchor.device)
         label.fill_(-1)
 
         argmax_ious, max_ious, gt_argmax_ious = self._calc_ious(
@@ -195,7 +197,7 @@ class AnchorTargetCreator:
         # 排个序
         gt_argmax_ious = ious.argmax(dim=0)
         gt_max_ious = ious[gt_argmax_ious, range(
-            len(ious.shape[1]))]  # 获取与bbox相对应IOU最大的anchor
+            ious.shape[1])]  # 获取与bbox相对应IOU最大的anchor
         gt_argmax_ious = torch.where(ious == gt_max_ious)[
             0]  # 获取与bbox绑定了的anchor的索引
 
@@ -224,11 +226,12 @@ def _get_inside_index(anchor: torch.Tensor, H, W):
 
 def _unmap(data: torch.Tensor, count, index, fill=0):
     if len(data.shape) == 1:
-        ret = torch.empty((count, ), dtype=data.dtype)
+        ret = torch.empty((count, ), dtype=data.dtype, device=data.device)
         ret.fill_(fill)
         ret[index] = data
     else:
-        ret = torch.empty((count, ) + data.shape[1:], dtype=data.dtype)
+        ret = torch.empty(
+            (count, ) + data.shape[1:], dtype=data.dtype, device=data.device)
         ret.fill_(fill)
         ret[index, :] = data
     return ret

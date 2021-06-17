@@ -22,6 +22,7 @@ class RPN(nn.Module):
 
     def forward(self, x: torch.Tensor, img_size, scale=1.):
         n, _, hh, ww = x.shape
+        self.anchor_base = self.anchor_base.to(x.device)
         anchor = _enumerate_shifted_anchor(self.anchor_base, self.feat_size, hh, ww)
 
         n_anchor = anchor.shape[0] // (hh * ww)  # 每个像素多少个anchor, 是特征图上的, 由于尺寸变小了个数会增多
@@ -43,7 +44,7 @@ class RPN(nn.Module):
             roi = self.proposal_layer(rpn_locs[i], rpn_fg_scores[i], anchor, img_size, scale=scale)
             batch_index = i * torch.ones((len(roi),), dtype=torch.int32)
             rois.append(roi)
-            roi_indices.append(roi_indices)
+            roi_indices.append(batch_index)
         return rpn_locs, rpn_scores, rois, roi_indices, anchor
 
     
@@ -53,6 +54,7 @@ def _enumerate_shifted_anchor(anchor_base: torch.Tensor, feat_stride, height, wi
     shift_x = torch.arange(0, width * feat_stride, feat_stride)
     shift_x, shift_y = torch.meshgrid(shift_x, shift_y)
     shift = torch.stack((shift_y.flatten(), shift_x.flatten(), shift_y.flatten(), shift_x.flatten()), dim=1)
+    shift = shift.to(anchor_base.device)
 
     A = anchor_base.shape[0]
     K = shift.shape[0]

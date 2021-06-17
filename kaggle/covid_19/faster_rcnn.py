@@ -30,6 +30,10 @@ class FasterRCNN(nn.Module):
         h = self.extractor(x)
         rpn_locs, rpn_scores, rois, roi_indices, anchor = self.rpn(
             h, img_size, scale)
+        if isinstance(roi_indices, list):  # since batch size = 1
+            roi_indices = roi_indices[0]
+        if isinstance(rois, list):
+            rois = rois[0]
         roic_cls_locs, roi_scores = self.head(h, rois, roi_indices)
         return roic_cls_locs, roi_scores, rois, roi_indices
     
@@ -48,14 +52,14 @@ class FasterRCNN(nn.Module):
         scores = list()
         for img, size in zip(imgs, sizes):
             img = img[None].float()  # expand with batch size 1
-            scale = img.shape[3] / size[1]
+            scale = img.shape[-1] / size[-1]
             roi_cls_locs, roi_scores, rois, _ = self(img, scale=scale)
             roi_score = roi_scores.data
             roi_cls_loc = roi_cls_locs.data
             roi: torch.Tensor = rois / scale  # 将roi还原到原图
 
-            mean = torch.as_tensor(self.loc_normalize_mean).repeat(self.n_class)[None]
-            std = torch.as_tensor(self.loc_normalize_std).repeat(self.n_class)[None]
+            mean = torch.as_tensor(self.loc_normalize_mean).repeat(self.n_class)[None].to(device=roi_cls_loc.device)
+            std = torch.as_tensor(self.loc_normalize_std).repeat(self.n_class)[None].to(device=roi_cls_loc.device)
 
             roi_cls_loc: torch.Tensor = (roi_cls_loc * std + mean)
             roi_cls_loc = roi_cls_loc.contiguous().view(-1, self.n_class, 4)
@@ -109,7 +113,7 @@ class FasterRCNN(nn.Module):
             prob_i = prob_i[mask]
             keep = nms(cls_bbox_i, prob_i, self.nms_thresh)
             bbox.append(cls_bbox_i[keep])
-            label.append((i-1) * torch.ones((len(keep), )))
+            label.append((i-1) * torch.ones((len(keep), ), device=raw_cls_bbox.device))
             score.append(prob_i[keep])
         bbox = torch.cat(bbox, dim=0).type(torch.float32)
         label = torch.cat(label, dim=0).type(torch.int32)

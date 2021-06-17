@@ -76,7 +76,7 @@ def bbox_iou(bbox_a: torch.Tensor, bbox_b: torch.Tensor):
 
     # 最大的左上角与最大的最小的右下角, 就构成IOU面积
     top_left = torch.maximum(bbox_a[:, None, :2], bbox_b[:, :2])
-    bottom_right = torch.maximum(bbox_a[:, None, 2:], bbox_b[:, 2:])
+    bottom_right = torch.minimum(bbox_a[:, None, 2:], bbox_b[:, 2:])
 
     area_inter = torch.prod(bottom_right - top_left, dim=2) * \
         (top_left < bottom_right).all(dim=2)

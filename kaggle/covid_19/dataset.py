@@ -7,14 +7,16 @@ import os
 import SimpleITK as sitk
 import torch
 import numpy as np
-
+from scipy.ndimage import zoom
+sitk.ProcessObject_GlobalWarningDisplayOff()
 
 def parse_label(v: str) -> Tuple[List, List]:
     if "none" in v:
         return [0], []
     else:
         b = v.split("opacity")
-        b = [list(map(lambda x: float(x), i.strip().split(" ")))[1:] for i in b if len(i)]
+        b = [list(map(lambda x: float(x), i.strip().split(" ")))[1:]
+             for i in b if len(i)]
         res = []
         for vec in b:
             res.append([vec[1], vec[0], vec[3], vec[2]])
@@ -43,7 +45,6 @@ class ImageData(Dataset):
 
     def __getitem__(self, idx: int):
         if self.csv is not None:
-            print(idx, len(self.ids), "======")
             _id = self.ids[idx]
             _bbox = self.bboxes[idx]
             _label = self.labels[idx]
@@ -53,17 +54,19 @@ class ImageData(Dataset):
             img_path = glob(os.path.join(
                 self.data_root, "**", f"{_study_instance}", "**", f"{_id}.dcm"), recursive=True)[0]
             img: np.ndarray = sitk.GetArrayFromImage(
-                sitk.ReadImage(img_path)).astype(np.float32)
+                sitk.ReadImage(img_path, imageIO="GDCMImageIO")).astype(np.float32)
             img = (img - img.min()) / (img.max() - img.min())
+            img = zoom(img, zoom=(1, 1/4, 1/4))
 
-            return torch.as_tensor(img), torch.as_tensor(bboxs), torch.as_tensor(label), 1
+            return torch.as_tensor(img), torch.as_tensor(bboxs), torch.as_tensor(label), 4
         else:
             img_path = self.files[idx]
             img: np.ndarray = sitk.GetArrayFromImage(
                 sitk.ReadImage(img_path)).astype(np.float32)
             img = (img - img.min()) / (img.max() - img.min())
-
-            return torch.as_tensor(img), 1
+            img = zoom(img, zoom=(1, 1/4, 1/4))
+            
+            return torch.as_tensor(img), 4
 
     def __len__(self):
         if self.csv is not None:
@@ -92,7 +95,7 @@ class ImageLevelData(LightningDataModule):
         print(f"Stage: {stage}")
 
     def train_dataloader(self):
-        return DataLoader(self.train_data, batch_size=1, shuffle=True, num_workers=4, pin_memory=True, prefetch_factor=4)
+        return DataLoader(self.train_data, batch_size=1, shuffle=True, num_workers=8, pin_memory=True, prefetch_factor=4)
 
     def test_dataloader(self):
-        return DataLoader(self.test_data, batch_size=1, num_workers=4, pin_memory=True, prefetch_factor=4)
+        return DataLoader(self.test_data, batch_size=1, num_workers=8, pin_memory=True, prefetch_factor=4)
