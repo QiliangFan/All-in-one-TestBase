@@ -103,7 +103,7 @@ class Net(LightningModule):
 
         # pred for test
         with torch.no_grad():
-            argsort = torch.argsort(roi_score[:, 1]).flip(dims=[0])[:8]
+            argsort = torch.argsort(roi_score[:, 1]).flip(dims=[0])
             sample_roi = sample_roi[argsort]
             roi_cls_loc = roi_cls_loc[argsort]
             pred_bbox = loc2box(sample_roi, roi_cls_loc[:, 1].view(-1, 4))
@@ -111,7 +111,10 @@ class Net(LightningModule):
             tmp = torch.ones_like(pred_bbox, device=pred_bbox.device)
             tmp[:, 0::2] = img_H
             tmp[:, 1::2] = img_W
-            pred_bbox = pred_bbox[torch.where((0 <= pred_bbox) & (pred_bbox < tmp))[0]]
+            cond = (0 <= pred_bbox) & (pred_bbox < tmp)
+            self.log_dict({"pred_bbox_min": pred_bbox.min(), "pred_bbox_max": pred_bbox.max()}, prog_bar=True)
+            cond = torch.all(cond, dim=1)
+            pred_bbox = pred_bbox[cond][:8]
 
         return LossTuple(*losses), pred_bbox
 
@@ -129,9 +132,9 @@ class Net(LightningModule):
 
                 img = imgs[0].data
                 img = self.plot(img, bboxes)
-                img = self.plot(img, pred_bbox, color=10)
-                self.vis_server.show_text(str(pred_bbox.tolist()))
+                img = self.plot(img, pred_bbox, (255, 0, 0))
                 self.vis_server.show_image(img)
+                self.vis_server.plot([losses.total_loss], batch_idx, "train loss")
             return losses.total_loss
         except:
             import traceback
@@ -159,15 +162,18 @@ class Net(LightningModule):
 
     @staticmethod
     @torch.no_grad()
-    def plot(img: Union[torch.Tensor, np.ndarray], bboxes: torch.Tensor, color: int = 255):
+    def plot(img: Union[torch.Tensor, np.ndarray], bboxes: torch.Tensor, color = 255):
         if isinstance(img, torch.Tensor):
             img: np.ndarray = img.cpu().squeeze().numpy()
-        if 0 <= img.max() <= 1:
-            img *= 255
         if min(img.shape) > 256:
                 bboxes[:, ::2] *= 256/img.shape[0]
                 bboxes[:, 1::2] *= 256/img.shape[1]
                 img = zoom(img, (256/img.shape[0], 256/img.shape[1]), mode="nearest")
+        img = (img - img.min()) / (img.max() - img.min()) * 255
+        if isinstance(color, tuple):
+            from PIL import Image
+            img = Image.fromarray(img).convert("RGB")
+            img = np.asarray(img).astype(np.float32)
         for bbox in bboxes:
             bbox = bbox.cpu().numpy().astype(np.int32)
             cv2.rectangle(img, (bbox[1], bbox[0]), (bbox[3], bbox[2]), color=color, thickness=2)
@@ -188,5 +194,5 @@ def _fast_rcnn_loc_loss(pred_loc: torch.Tensor, gt_loc: torch.Tensor, gt_label: 
     with torch.no_grad():
         in_weight = torch.zeros(gt_loc.shape, device=gt_loc.device)
         in_weight[(gt_label > 0).view(-1, 1).expand_as(in_weight)] = 1
-    loc_loss = _smooth_l1_loss(pred_loc, gt_loc, in_weight.detach(), sigma)
+    loc_loss = _smooth_l1_loss(pred_loc, gt_loc, in_weight, sigma)
     return loc_loss

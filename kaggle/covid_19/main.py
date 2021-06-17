@@ -19,7 +19,7 @@ else:
     ckpt_model = None
 ckpt = ModelCheckpoint(dirpath="ckpt")
 trainer = Trainer(gpus=1, max_epochs=10, fast_dev_run=False, callbacks=[ckpt], resume_from_checkpoint=ckpt_model)
-model = FasterRCNNVGG(n_fg_class=1)
+model = FasterRCNNVGG(n_fg_class=1, ratios=[0.125, 0.25, 0.5, 1, 2, 4, 8], anchor_scales=[2, 4, 8])
 net = Net(model)
 data = ImageLevelData(train_root, image_level)
 trainer.fit(net, datamodule=data)

@@ -54,7 +54,7 @@ class ProposalTargetCreator:
         if len(neg_index) > neg_roi_per_this_image:
             neg_index = random.sample(
                 neg_index.tolist(), neg_roi_per_this_image)
-        gt_roi_label[neg_index] = 1
+        gt_roi_label[neg_index] = 0
 
         keep_index = torch.cat([torch.as_tensor(pos_index).to(device=roi.device), torch.as_tensor(
             neg_index).to(device=roi.device)]).to(device=roi.device)
@@ -101,9 +101,9 @@ class ProposalCreator:
         roi[:, 1:4:2] = torch.clip(roi[:, 1:4:2], 0, img_size[1])
 
         min_size = self.min_size * scale
-        hs = roi[:, 3] - roi[:, 1]
-        ws = roi[:, 2] - roi[:, 0]
-        keep = torch.where((hs > min_size) & (ws > min_size))[0]
+        hs = roi[:, 2] - roi[:, 0]
+        ws = roi[:, 3] - roi[:, 1]
+        keep = torch.where((hs >= min_size) & (ws >= min_size))[0]
         roi, score = roi[keep, :], score[keep]
 
         order = score.flatten().argsort().flip(dims=[0])  # largs -> small

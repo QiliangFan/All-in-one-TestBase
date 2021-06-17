@@ -5,6 +5,8 @@ import numpy as np
 
 
 class ImageShow:
+    idx = 0
+    max_idx = 20
 
     def __init__(self, env_name="main"):
         try:
@@ -18,8 +20,12 @@ class ImageShow:
             if isinstance(arr, np.ndarray):
                 arr = torch.from_numpy(arr)
             assert isinstance(arr, torch.Tensor)
+            if arr.ndim == 3:
+                arr: torch.Tensor = arr.permute(dims=(2, 0, 1))
+                arr= arr.type(torch.float32)
             env = env if env is not None else self.env
-            self.vis.image(arr, "image", env)
+            self.idx += 1
+            self.vis.image(arr, f"image{self.idx % self.max_idx}", env)
         else:
             return
 
@@ -28,3 +34,9 @@ class ImageShow:
             self.vis.text(content, win="text", env=self.env, append=self.vis.win_exists("text"))
         else:
             return
+
+
+    def plot(self, y, x, caption):
+        if self.vis is not None:
+            y = [i.cpu() for i in y]
+            self.vis.line(y, [x], win=caption, opts={"legend": ["loss"]}, update="append")

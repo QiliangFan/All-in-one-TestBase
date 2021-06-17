@@ -5,6 +5,7 @@ from rpn import RPN
 from torchvision.ops import RoIPool
 from typing import Union, List, Dict, cast, Any
 
+
 class VGG(nn.Module):
 
     def __init__(
@@ -66,12 +67,14 @@ def make_layers(cfg: List[Union[str, int]], batch_norm: bool = False) -> nn.Sequ
             in_channels = v
     return nn.Sequential(*layers)
 
+
 cfgs: Dict[str, List[Union[str, int]]] = {
     'A': [64, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M'],
     'B': [64, 64, 'M', 128, 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M'],
     'D': [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 'M', 512, 512, 512, 'M', 512, 512, 512, 'M'],
     'E': [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 256, 'M', 512, 512, 512, 512, 'M', 512, 512, 512, 512, 'M'],
 }
+
 
 def _vgg(arch: str, cfg: str, batch_norm: bool, pretrained: bool, progress: bool, **kwargs: Any) -> VGG:
     if pretrained:
@@ -143,7 +146,7 @@ class VGGROIHead(nn.Module):
 
         self.classifier = classifier
         self.cls_loc = nn.Linear(4096, n_class * 4)
-        self.score = nn.Linear(4096, n_class)
+        self.score = nn.Sequential(nn.Linear(4096, n_class), nn.Softmax(dim=1))
 
         self.n_class = n_class
         self.roi_size = roi_size
