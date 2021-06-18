@@ -13,12 +13,12 @@ class ProposalTargetCreator:
         [type]: [description]
     """
 
-    def __init__(self, n_sample=128, pos_ratio=0.25, pos_iou_thresh=0.5, neg_iou_thresh_hi=0.5, neg_iou_thresh_lo=0.0):
+    def __init__(self, n_sample=128, pos_ratio=0.5, pos_iou_thresh=0.5, neg_iou_thresh_hi=0.5, neg_iou_thresh_lo=0.0):
         """[summary]
 
         Args:
             n_sample (int, optional): The number of sampled regions. Defaults to 128.
-            pos_ratio (float, optional): Fractions of regions that is labeled as a foreground. Defaults to 0.25.
+            pos_ratio (float, optional): Fractions of regions that is labeled as a foreground. Defaults to 0.5.
             pos_iou_thresh (float, optional): IoU threshold for Roi to be considerer as a foreground. Defaults to 0.5.
             neg_iou_thresh_hi (float, optional): RoI is considered to be the background if IoU is in [neg_iou_thresh_lo, neg_iou_thresh_hi]. Defaults to 0.5.
             neg_iou_thresh_lo (float, optional): [description]. Defaults to 0.0.
@@ -88,7 +88,7 @@ class ProposalCreator:
         self.n_test_post_nms = n_test_post_nms
         self.min_size = min_size
 
-    def __call__(self, loc: torch.Tensor, score: torch.Tensor, anchor: torch.Tensor, img_size, scale=1.):
+    def __call__(self, loc: torch.Tensor, score: torch.Tensor, anchor: torch.Tensor, img_size):
         if self.parent_model.training:
             n_pre_nms = self.n_train_pre_nms
             n_post_nms = self.n_train_post_nms
@@ -100,7 +100,7 @@ class ProposalCreator:
         roi[:, 0:4:2] = torch.clip(roi[:, 0:4:2], 0, img_size[0])
         roi[:, 1:4:2] = torch.clip(roi[:, 1:4:2], 0, img_size[1])
 
-        min_size = self.min_size * scale
+        min_size = self.min_size
         hs = roi[:, 2] - roi[:, 0]
         ws = roi[:, 3] - roi[:, 1]
         keep = torch.where((hs >= min_size) & (ws >= min_size))[0]
@@ -111,7 +111,7 @@ class ProposalCreator:
             order = order[:n_pre_nms]
         roi, score = roi[order, :], score[order]
 
-        keep = nms(roi, score, self.nms_thresh)
+        keep = nms(roi[:, [1, 0, 3, 2]], score, self.nms_thresh)
         if n_post_nms > 0:
             keep = keep[:n_post_nms]
         roi = roi[keep]
@@ -216,10 +216,10 @@ def _get_inside_index(anchor: torch.Tensor, H, W):
         [type]: [description]
     """
     index_inside = torch.where(
-        (anchor[:, 0] >= 0) &
-        (anchor[:, 1] >= 0) &
-        (anchor[:, 2] <= H) &
-        (anchor[:, 3] <= W)
+        (anchor[:, 0] > 0) &
+        (anchor[:, 1] > 0) &
+        (anchor[:, 2] < H) &
+        (anchor[:, 3] < W)
     )[0]
     return index_inside
 

@@ -111,7 +111,7 @@ class FasterRCNN(nn.Module):
             mask = prob_i > self.score_thresh
             cls_bbox_i = cls_bbox_i[mask]
             prob_i = prob_i[mask]
-            keep = nms(cls_bbox_i, prob_i, self.nms_thresh)
+            keep = nms(cls_bbox_i[:, [1, 0, 3, 2]], prob_i, self.nms_thresh)
             bbox.append(cls_bbox_i[keep])
             label.append((i-1) * torch.ones((len(keep), ), device=raw_cls_bbox.device))
             score.append(prob_i[keep])

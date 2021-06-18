@@ -2,7 +2,7 @@ from utils.bbox_tools import loc2box
 from pytorch_lightning import LightningModule
 from faster_rcnn import FasterRCNN
 from collections import namedtuple
-from utils.creator_tool import AnchorTargetCreator, ProposalTargetCreator
+from utils.creator_tool import AnchorTargetCreator, ProposalTargetCreator, _get_inside_index
 import torch
 from torch import nn
 from torch import optim
@@ -29,7 +29,7 @@ class Net(LightningModule):
         self.num_classes = faster_rcnn.n_class
 
         # 利用gt-bbox将anchor 转为 gt-loc, gt-label
-        self.anchor_target_creator = AnchorTargetCreator()
+        self.anchor_target_creator = AnchorTargetCreator(pos_iou_thresh=0.5)
         self.proposal_target_creator = ProposalTargetCreator()
 
         self.loc_normalize_mean = faster_rcnn.loc_normalize_mean
@@ -40,7 +40,7 @@ class Net(LightningModule):
         self.roi_cm = ConfusionMeter(self.num_classes)
         self.meters = {k: AverageValueMeter() for k in LossTuple._fields}
 
-    def forward(self, imgs: torch.Tensor, bboxes: torch.Tensor, labels: torch.Tensor, scale):
+    def forward(self, imgs: torch.Tensor, bboxes: torch.Tensor, labels: torch.Tensor, scale: int):
         n = bboxes.shape[0]
         assert n == 1, "Only support batch size 1"
 
@@ -49,7 +49,7 @@ class Net(LightningModule):
 
         features = self.faster_rcnn.extractor(imgs)
         rpn_locs, rpn_scores, rois, roi_indices, anchor = self.faster_rcnn.rpn(
-            features, img_size, scale)
+            features, img_size)
 
         # since batch_size = 1
         bbox = bboxes[0]
@@ -60,17 +60,20 @@ class Net(LightningModule):
 
         # sample RoIs
         with torch.no_grad():
+            # bbox 注意缩放
+            _bbox = bbox / scale
             sample_roi, gt_roi_loc, gt_roi_label = self.proposal_target_creator(
-                roi, bbox, label, self.loc_normalize_mean, self.loc_normalize_std)
+                roi, _bbox, label, self.loc_normalize_mean, self.loc_normalize_std)
 
         # since batch size = 1, there is only one image
-        sample_roi_index = torch.zeros(len(sample_roi), dtype=sample_roi.dtype, device=sample_roi.device)
+        sample_roi_index = torch.zeros(
+            len(sample_roi), dtype=sample_roi.dtype, device=sample_roi.device)
         roi_cls_loc, roi_score = self.faster_rcnn.head(
             features, sample_roi, sample_roi_index)
 
         # ----------------------------RPN loss-------------------------------------#
         gt_rpn_loc, gt_rpn_label = self.anchor_target_creator(
-            bbox, anchor, img_size)
+            _bbox, anchor, img_size)
         gt_rpn_label = gt_rpn_label.long()
         rpn_loc_loss = _fast_rcnn_loc_loss(
             rpn_loc, gt_rpn_loc, gt_rpn_label.data, 1)
@@ -97,26 +100,49 @@ class Net(LightningModule):
         roi_cls_loss = F.cross_entropy(roi_score, gt_roi_label)
         with torch.no_grad():
             self.roi_cm.add(roi_score, gt_roi_label.long())
-        
-        losses = [rpn_loc_loss, rpn_cls_loss, roi_loc_loss, roi_cls_loss]
+
+        losses = [
+            rpn_loc_loss,
+            rpn_cls_loss,
+            roi_loc_loss,
+            roi_cls_loss
+        ]
         losses = losses + [sum(losses)]
 
-        # pred for test
+        # -----------------------------debug for RPN-----------------------------------#
+        # with torch.no_grad():
+        #     image = imgs.data
+        #     image = self.plot(image, _bbox, color=255)
+        #     roi = sample_roi[gt_roi_label == 1]
+        #     image = self.plot(image, roi , (0, 255, 0))
+        #     # image = self.plot(image, sample_roi[gt_roi_label == 0], (255, 0, 0))
+        #     self.vis_server.show_image(image)
+        # -----------------------------------------------------------------------------#
+
+        # ----------------------------debug for ROI--------------------------------------#
         with torch.no_grad():
             argsort = torch.argsort(roi_score[:, 1]).flip(dims=[0])
             sample_roi = sample_roi[argsort]
             roi_cls_loc = roi_cls_loc[argsort]
             pred_bbox = loc2box(sample_roi, roi_cls_loc[:, 1].view(-1, 4))
-            img_H, img_W = imgs.shape[-2], imgs.shape[-1]
-            tmp = torch.ones_like(pred_bbox, device=pred_bbox.device)
-            tmp[:, 0::2] = img_H
-            tmp[:, 1::2] = img_W
-            cond = (0 <= pred_bbox) & (pred_bbox < tmp)
-            self.log_dict({"pred_bbox_min": pred_bbox.min(), "pred_bbox_max": pred_bbox.max()}, prog_bar=True)
-            cond = torch.all(cond, dim=1)
-            pred_bbox = pred_bbox[cond][:8]
 
-        return LossTuple(*losses), pred_bbox
+            img_H, img_W = imgs.shape[-2], imgs.shape[-1]
+            inside_index = _get_inside_index(pred_bbox, img_H, img_W)
+            pred_bbox = pred_bbox[inside_index][:4]
+            roi_score = roi_score[inside_index][:4]
+
+            from torchvision.ops import nms
+            keep = nms(pred_bbox[:, [1, 0, 3, 2]],
+                       roi_score[:, 1].view(-1), 0.7)
+            pred_bbox = pred_bbox[keep]
+            roi_score = roi_score[:, 1][keep]
+            img = imgs[0].data
+            img = self.plot(img, _bbox)
+            img = self.plot(img, pred_bbox, (255, 0, 0), score=roi_score)
+            self.vis_server.show_image(img)
+        # --------------------------------------------------------------------------------#
+
+        return LossTuple(*losses)
 
     def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor], batch_idx):
         """
@@ -124,17 +150,9 @@ class Net(LightningModule):
         """
         try:
             imgs, bboxes, labels, scale = batch
-            losses, pred_bbox = self.forward(imgs, bboxes, labels, scale)
-            with torch.no_grad():
-                bboxes, labels = bboxes[0], labels[0]
-                bboxes /= scale
-                pred_bbox /= scale
-
-                img = imgs[0].data
-                img = self.plot(img, bboxes)
-                img = self.plot(img, pred_bbox, (255, 0, 0))
-                self.vis_server.show_image(img)
-                self.vis_server.plot([losses.total_loss], batch_idx, "train loss")
+            losses = self.forward(imgs, bboxes, labels, scale)
+            #     self.vis_server.plot([losses.total_loss],
+            #                          batch_idx, "train loss")
             return losses.total_loss
         except:
             import traceback
@@ -146,7 +164,8 @@ class Net(LightningModule):
         bacth size只能为1
         """
         imgs, scale = batch
-        bboxes, labels, scores = self.faster_rcnn.predict(imgs, [imgs.shape[2:]])
+        bboxes, labels, scores = self.faster_rcnn.predict(
+            imgs, [imgs.shape[2:]])
         # since batch size = 1
         bboxes, labels, scores = bboxes[0], labels[0], scores[0]
         argsort = torch.argsort(scores).flip(dims=[0])
@@ -158,25 +177,30 @@ class Net(LightningModule):
         return batch_idx
 
     def configure_optimizers(self):
-        return optim.Adam(self.parameters(), lr=1e-3)
+        return optim.Adam(self.parameters(), lr=1e-3, weight_decay=1e-4, amsgrad=True)
 
     @staticmethod
     @torch.no_grad()
-    def plot(img: Union[torch.Tensor, np.ndarray], bboxes: torch.Tensor, color = 255):
+    def plot(img: Union[torch.Tensor, np.ndarray], bboxes: torch.Tensor, color=255, **kwargs):
+        if "score" in kwargs:
+            score: torch.Tensor = kwargs["score"]
+        else:
+            score = None
         if isinstance(img, torch.Tensor):
             img: np.ndarray = img.cpu().squeeze().numpy()
-        if min(img.shape) > 256:
-                bboxes[:, ::2] *= 256/img.shape[0]
-                bboxes[:, 1::2] *= 256/img.shape[1]
-                img = zoom(img, (256/img.shape[0], 256/img.shape[1]), mode="nearest")
         img = (img - img.min()) / (img.max() - img.min()) * 255
-        if isinstance(color, tuple):
+        if isinstance(color, tuple) and img.ndim == 2:
             from PIL import Image
             img = Image.fromarray(img).convert("RGB")
             img = np.asarray(img).astype(np.float32)
-        for bbox in bboxes:
-            bbox = bbox.cpu().numpy().astype(np.int32)
-            cv2.rectangle(img, (bbox[1], bbox[0]), (bbox[3], bbox[2]), color=color, thickness=2)
+        bboxes = bboxes.cpu().numpy().astype(np.int32)
+        for i, bbox in enumerate(bboxes):
+            if score is not None:
+                sc = score[i]
+                cv2.putText(img, f"{sc:.2f}", (int(bbox[1]), int(
+                    bbox[0]-5)), fontFace=cv2.FONT_HERSHEY_COMPLEX, fontScale=1, color=(0, 0, 255))
+            cv2.rectangle(img, (bbox[1], bbox[0]),
+                          (bbox[3], bbox[2]), color=color, thickness=5)
         return img
 
 

@@ -21,7 +21,7 @@ class RPN(nn.Module):
         self.score = nn.Conv2d(mid_channels, n_anchor*2, 1, 1, 0)
         self.loc = nn.Conv2d(mid_channels, n_anchor*4, 1, 1, 0)
 
-    def forward(self, x: torch.Tensor, img_size, scale=1.):
+    def forward(self, x: torch.Tensor, img_size):
         n, _, hh, ww = x.shape
         self.anchor_base = self.anchor_base.to(x.device)
         anchor = _enumerate_shifted_anchor(self.anchor_base, self.feat_size, hh, ww)
@@ -43,7 +43,7 @@ class RPN(nn.Module):
         rois = list()
         roi_indices = list()
         for i in range(n):
-            roi = self.proposal_layer(rpn_locs[i], rpn_fg_scores[i], anchor, img_size, scale=scale)
+            roi = self.proposal_layer(rpn_locs[i], rpn_fg_scores[i], anchor, img_size)
             batch_index = i * torch.ones((len(roi),), dtype=torch.int32)
             rois.append(roi)
             roi_indices.append(batch_index)

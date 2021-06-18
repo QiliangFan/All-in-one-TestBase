@@ -6,7 +6,7 @@ import numpy as np
 
 class ImageShow:
     idx = 0
-    max_idx = 20
+    max_idx = 5
 
     def __init__(self, env_name="main"):
         try:
@@ -39,4 +39,4 @@ class ImageShow:
     def plot(self, y, x, caption):
         if self.vis is not None:
             y = [i.cpu() for i in y]
-            self.vis.line(y, [x], win=caption, opts={"legend": ["loss"]}, update="append")
+            self.vis.line(y, [x], win=caption, opts={"legend": [caption]}, update="append")

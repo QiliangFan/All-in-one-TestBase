@@ -18,13 +18,13 @@ class VGG(nn.Module):
         self.features = features
         self.avgpool = nn.AdaptiveAvgPool2d((7, 7))
         self.classifier = nn.Sequential(
-            nn.Linear(512 * 7 * 7, 4096),
-            nn.ReLU(True),
-            nn.Dropout(),
-            nn.Linear(4096, 4096),
-            nn.ReLU(True),
-            nn.Dropout(),
-            nn.Linear(4096, 4096),
+            nn.Linear(512 * 7 * 7, 512),
+            # nn.ReLU(True),
+            # nn.Dropout(),
+            nn.Linear(512, 512),
+            # nn.ReLU(True),
+            # nn.Dropout(),
+            nn.Linear(512, 512),
         )
         if init_weights:
             self._initialize_weights()
@@ -61,9 +61,9 @@ def make_layers(cfg: List[Union[str, int]], batch_norm: bool = False) -> nn.Sequ
             v = cast(int, v)
             conv2d = nn.Conv2d(in_channels, v, kernel_size=3, padding=1)
             if batch_norm:
-                layers += [conv2d, nn.BatchNorm2d(v), nn.ReLU(inplace=True)]
+                layers += [conv2d, nn.ReLU(True)]
             else:
-                layers += [conv2d, nn.ReLU(inplace=True)]
+                layers += [conv2d, nn.ReLU(True)]
             in_channels = v
     return nn.Sequential(*layers)
 
@@ -119,7 +119,10 @@ class FasterRCNNVGG(FasterRCNN):
             512, 512,
             ratios=ratios,
             anchor_scales=anchor_scales,
-            feat_size=self.feat_stride
+            feat_size=self.feat_stride,
+            proposal_creator_params={
+                "min_size": 8,
+            }
         )
 
         head = VGGROIHead(
@@ -145,8 +148,8 @@ class VGGROIHead(nn.Module):
         super(VGGROIHead, self).__init__()
 
         self.classifier = classifier
-        self.cls_loc = nn.Linear(4096, n_class * 4)
-        self.score = nn.Sequential(nn.Linear(4096, n_class), nn.Softmax(dim=1))
+        self.cls_loc = nn.Linear(512, n_class * 4)
+        self.score = nn.Sequential(nn.Linear(512, n_class), nn.Softmax(dim=1))
 
         self.n_class = n_class
         self.roi_size = roi_size
