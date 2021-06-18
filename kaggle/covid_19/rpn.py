@@ -42,14 +42,15 @@ class RPN(nn.Module):
 
         rois = list()
         roi_indices = list()
+        rpn_debug_score = list()
         for i in range(n):
-            roi = self.proposal_layer(rpn_locs[i], rpn_fg_scores[i], anchor, img_size)
+            roi, score = self.proposal_layer(rpn_locs[i], rpn_fg_scores[i], anchor, img_size)
             batch_index = i * torch.ones((len(roi),), dtype=torch.int32)
             rois.append(roi)
             roi_indices.append(batch_index)
-        return rpn_locs, rpn_scores, rois, roi_indices, anchor
+            rpn_debug_score.append(score)
+        return rpn_locs, rpn_scores, rois, roi_indices, anchor, rpn_debug_score
 
-    
 
 def _enumerate_shifted_anchor(anchor_base: torch.Tensor, feat_stride, height, width):
     shift_y = torch.arange(0, height * feat_stride, feat_stride)

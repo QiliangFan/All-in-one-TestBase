@@ -115,7 +115,8 @@ class ProposalCreator:
         if n_post_nms > 0:
             keep = keep[:n_post_nms]
         roi = roi[keep]
-        return roi
+        score = score[keep]
+        return roi, score
 
 
 class AnchorTargetCreator:

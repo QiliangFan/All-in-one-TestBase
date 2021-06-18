@@ -48,7 +48,8 @@ class Net(LightningModule):
         img_size = (H, W)
 
         features = self.faster_rcnn.extractor(imgs)
-        rpn_locs, rpn_scores, rois, roi_indices, anchor = self.faster_rcnn.rpn(
+        # rpn_debug_score 和 rois 是对应的, 用来输出对应roi的score分数
+        rpn_locs, rpn_scores, rois, roi_indices, anchor, rpn_debug_score = self.faster_rcnn.rpn(
             features, img_size)
 
         # since batch_size = 1
@@ -57,6 +58,7 @@ class Net(LightningModule):
         rpn_score = rpn_scores[0]
         rpn_loc = rpn_locs[0]
         roi = rois[0]
+        rpn_debug_score: torch.Tensor = rpn_debug_score[0]
 
         # sample RoIs
         with torch.no_grad():
@@ -98,48 +100,48 @@ class Net(LightningModule):
             gt_roi_label.data,
         )
         roi_cls_loss = F.cross_entropy(roi_score, gt_roi_label)
+        roi_cls_loss += F.binary_cross_entropy_with_logits(roi_score[:, -1], gt_roi_label.float(), pos_weight=torch.as_tensor([4], device=roi_score.device))
         with torch.no_grad():
             self.roi_cm.add(roi_score, gt_roi_label.long())
 
         losses = [
             rpn_loc_loss,
-            rpn_cls_loss,
+            rpn_cls_loss * 100,
             roi_loc_loss,
-            roi_cls_loss
+            roi_cls_loss * 100
         ]
         losses = losses + [sum(losses)]
 
         # -----------------------------debug for RPN-----------------------------------#
-        # with torch.no_grad():
-        #     image = imgs.data
-        #     image = self.plot(image, _bbox, color=255)
-        #     roi = sample_roi[gt_roi_label == 1]
-        #     image = self.plot(image, roi , (0, 255, 0))
-        #     # image = self.plot(image, sample_roi[gt_roi_label == 0], (255, 0, 0))
-        #     self.vis_server.show_image(image)
+        with torch.no_grad():
+            debug_score_sort = torch.argsort(rpn_debug_score, descending=True)
+            rpn_debug_score = rpn_debug_score[debug_score_sort][:8]
+            roi = roi[debug_score_sort][:8]
+            image = imgs.data
+            image = self.plot(image, _bbox, color=255)
+            image = self.plot(image, roi , (0, 255, 0), score=rpn_debug_score)
+            # image = self.plot(image, sample_roi[gt_roi_label == 0], (255, 0, 0))
+            self.vis_server.show_image(image)
         # -----------------------------------------------------------------------------#
 
         # ----------------------------debug for ROI--------------------------------------#
-        with torch.no_grad():
-            argsort = torch.argsort(roi_score[:, 1]).flip(dims=[0])
-            sample_roi = sample_roi[argsort]
-            roi_cls_loc = roi_cls_loc[argsort]
-            pred_bbox = loc2box(sample_roi, roi_cls_loc[:, 1].view(-1, 4))
+        # with torch.no_grad():
+        #     pred_bbox = loc2box(sample_roi, roi_cls_loc[:, -1].view(-1, 4))
 
-            img_H, img_W = imgs.shape[-2], imgs.shape[-1]
-            inside_index = _get_inside_index(pred_bbox, img_H, img_W)
-            pred_bbox = pred_bbox[inside_index][:4]
-            roi_score = roi_score[inside_index][:4]
+        #     img_H, img_W = imgs.shape[-2], imgs.shape[-1]
+        #     inside_index = _get_inside_index(pred_bbox, img_H, img_W)
+        #     pred_bbox = pred_bbox[inside_index]
+        #     roi_score = roi_score[inside_index]
 
-            from torchvision.ops import nms
-            keep = nms(pred_bbox[:, [1, 0, 3, 2]],
-                       roi_score[:, 1].view(-1), 0.7)
-            pred_bbox = pred_bbox[keep]
-            roi_score = roi_score[:, 1][keep]
-            img = imgs[0].data
-            img = self.plot(img, _bbox)
-            img = self.plot(img, pred_bbox, (255, 0, 0), score=roi_score)
-            self.vis_server.show_image(img)
+        #     argsort = torch.argsort(roi_score[:, -1]).flip(dims=[0])
+        #     sample_roi = sample_roi[argsort]
+        #     roi_cls_loc = roi_cls_loc[argsort]
+        #     pred_bbox = pred_bbox[:8]
+        #     roi_score = roi_score[:, 1][:8]
+        #     img = imgs[0].data
+        #     img = self.plot(img, _bbox)
+        #     img = self.plot(img, pred_bbox, (255, 0, 0), score=roi_score)
+        #     self.vis_server.show_image(img)
         # --------------------------------------------------------------------------------#
 
         return LossTuple(*losses)
@@ -177,7 +179,7 @@ class Net(LightningModule):
         return batch_idx
 
     def configure_optimizers(self):
-        return optim.Adam(self.parameters(), lr=1e-3, weight_decay=1e-4, amsgrad=True)
+        return optim.SGD(self.parameters(), lr=1e-4, weight_decay=1e-8, momentum=0.1)
 
     @staticmethod
     @torch.no_grad()

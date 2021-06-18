@@ -19,10 +19,10 @@ class VGG(nn.Module):
         self.avgpool = nn.AdaptiveAvgPool2d((7, 7))
         self.classifier = nn.Sequential(
             nn.Linear(512 * 7 * 7, 512),
-            # nn.ReLU(True),
+            nn.ReLU(True),
             # nn.Dropout(),
             nn.Linear(512, 512),
-            # nn.ReLU(True),
+            nn.ReLU(True),
             # nn.Dropout(),
             nn.Linear(512, 512),
         )
@@ -129,14 +129,13 @@ class FasterRCNNVGG(FasterRCNN):
             n_class=n_fg_class + 1,
             roi_size=7,
             spatial_scale=(1. / self.feat_stride),
-            classifier=classifier
         )
 
         super().__init__(extractor, rpn, head)
 
 
 class VGGROIHead(nn.Module):
-    def __init__(self, n_class, roi_size, spatial_scale, classifier: nn.Module):
+    def __init__(self, n_class, roi_size, spatial_scale):
         """[summary]
 
         Args:
@@ -147,9 +146,24 @@ class VGGROIHead(nn.Module):
         """
         super(VGGROIHead, self).__init__()
 
-        self.classifier = classifier
-        self.cls_loc = nn.Linear(512, n_class * 4)
-        self.score = nn.Sequential(nn.Linear(512, n_class), nn.Softmax(dim=1))
+        self.classifier = nn.Sequential(
+            nn.Linear(512 * 7 * 7, 1024),
+            nn.ReLU(True),
+            nn.Dropout(),
+            # nn.Linear(1024, 1024),
+            # nn.ReLU(True),
+            # nn.Dropout(),
+            nn.Linear(1024, 1024),
+            nn.ReLU(True)
+        )
+        self.cls_loc = nn.Sequential(
+            nn.Linear(1024, n_class * 4)
+        )
+        self.score = nn.Sequential(
+            nn.Linear(1024, n_class),
+            nn.Sigmoid(),
+            # nn.Softmax(dim=1)
+        )
 
         self.n_class = n_class
         self.roi_size = roi_size
