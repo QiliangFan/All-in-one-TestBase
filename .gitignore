@@ -4,3 +4,4 @@
 **/lightning_logs/
 **/ckpt/
 **/img/
+**/dask-worker-space/

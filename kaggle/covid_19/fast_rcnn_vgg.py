@@ -110,13 +110,14 @@ class FasterRCNNVGG(FasterRCNN):
     feat_stride = 16
 
     def __init__(self,
+                 mid_channel,
                  n_fg_class=20,
                  ratios=[0.5, 1, 2],
                  anchor_scales=[8, 16, 32]):
         extractor, classifier = decom_vgg16()
 
         rpn = RPN(
-            512, 512,
+            mid_channel,
             ratios=ratios,
             anchor_scales=anchor_scales,
             feat_size=self.feat_stride,
@@ -161,8 +162,8 @@ class VGGROIHead(nn.Module):
         )
         self.score = nn.Sequential(
             nn.Linear(1024, n_class),
-            nn.Sigmoid(),
-            # nn.Softmax(dim=1)
+            # nn.Sigmoid(),
+            nn.Softmax(dim=1)
         )
 
         self.n_class = n_class

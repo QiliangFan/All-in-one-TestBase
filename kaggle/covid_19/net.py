@@ -1,18 +1,19 @@
-from utils.bbox_tools import loc2box
 from pytorch_lightning import LightningModule
-from faster_rcnn import FasterRCNN
 from collections import namedtuple
-from utils.creator_tool import AnchorTargetCreator, ProposalTargetCreator, _get_inside_index
+from utils.creator_tool import AnchorTargetCreator, ProposalTargetCreator
 import torch
 from torch import nn
 from torch import optim
 from torchnet.meter import ConfusionMeter, AverageValueMeter
 from torch.nn import functional as F
-from typing import Union, Tuple, cast
+from typing import Union, Tuple
 import cv2
 import numpy as np
 from visdom_utils import ImageShow
-from scipy.ndimage import zoom
+import autogluon.core as ag
+from fast_rcnn_vgg import FasterRCNNVGG
+from autogluon.core.scheduler.reporter import LocalStatusReporter
+
 
 LossTuple = namedtuple("LossTuple", [
                        "rpn_loc_loss", "rpn_cls_loss", "roi_loc_loss", "roi_cls_loss", "total_loss"])
@@ -20,11 +21,20 @@ LossTuple = namedtuple("LossTuple", [
 
 class Net(LightningModule):
 
-    def __init__(self, faster_rcnn: FasterRCNN):
+    def __init__(self, mid_channel = 512, lr = 1e-4, weight_decay = 1e-8, reporter: LocalStatusReporter = None):
         super().__init__()
+
+        # reporter 
+        self.reporter = reporter
+
+        self.lr = lr
+        self.weight_decay = weight_decay
+        self.mid_channel = mid_channel
 
         self.vis_server = ImageShow()
 
+        faster_rcnn = FasterRCNNVGG(mid_channel=self.mid_channel, n_fg_class=1, ratios=[
+                                    0.25, 1, 4], anchor_scales=[4, 8, 16])
         self.faster_rcnn = faster_rcnn
         self.num_classes = faster_rcnn.n_class
 
@@ -39,6 +49,9 @@ class Net(LightningModule):
         # fastrcnn roi的score判定类标: [class0-others, class1, class2, ..., classN]
         self.roi_cm = ConfusionMeter(self.num_classes)
         self.meters = {k: AverageValueMeter() for k in LossTuple._fields}
+
+        # smooth l1 loss
+        self.smooth_loss = nn.SmoothL1Loss(reduction="sum")
 
     def forward(self, imgs: torch.Tensor, bboxes: torch.Tensor, labels: torch.Tensor, scale: int):
         n = bboxes.shape[0]
@@ -77,8 +90,10 @@ class Net(LightningModule):
         gt_rpn_loc, gt_rpn_label = self.anchor_target_creator(
             _bbox, anchor, img_size)
         gt_rpn_label = gt_rpn_label.long()
-        rpn_loc_loss = _fast_rcnn_loc_loss(
-            rpn_loc, gt_rpn_loc, gt_rpn_label.data, 1)
+        rpn_loc_loss = self.smooth_loss(
+            rpn_loc[gt_rpn_label > 0], gt_rpn_loc[gt_rpn_label > 0])
+        # rpn_loc_loss = _fast_rcnn_loc_loss(
+        #     rpn_loc, gt_rpn_loc, gt_rpn_label.data, 1)
 
         rpn_cls_loss = F.cross_entropy(
             rpn_score, gt_rpn_label, ignore_index=-1)
@@ -100,28 +115,31 @@ class Net(LightningModule):
             gt_roi_label.data,
         )
         roi_cls_loss = F.cross_entropy(roi_score, gt_roi_label)
-        roi_cls_loss += F.binary_cross_entropy_with_logits(roi_score[:, -1], gt_roi_label.float(), pos_weight=torch.as_tensor([4], device=roi_score.device))
+        roi_cls_loss += F.binary_cross_entropy_with_logits(roi_score[:, -1], gt_roi_label.float(
+        ), pos_weight=torch.as_tensor([4], device=roi_score.device))
         with torch.no_grad():
             self.roi_cm.add(roi_score, gt_roi_label.long())
 
         losses = [
             rpn_loc_loss,
-            rpn_cls_loss * 100,
+            rpn_cls_loss * 10,
             roi_loc_loss,
-            roi_cls_loss * 100
+            roi_cls_loss
         ]
+        self.log_dict({"rpn_loc": rpn_loc_loss, "rpn_cls": rpn_cls_loss,
+                       "roi_loc": roi_loc_loss, "roi_cls": roi_cls_loss}, prog_bar=True)
         losses = losses + [sum(losses)]
 
         # -----------------------------debug for RPN-----------------------------------#
-        with torch.no_grad():
-            debug_score_sort = torch.argsort(rpn_debug_score, descending=True)
-            rpn_debug_score = rpn_debug_score[debug_score_sort][:8]
-            roi = roi[debug_score_sort][:8]
-            image = imgs.data
-            image = self.plot(image, _bbox, color=255)
-            image = self.plot(image, roi , (0, 255, 0), score=rpn_debug_score)
-            # image = self.plot(image, sample_roi[gt_roi_label == 0], (255, 0, 0))
-            self.vis_server.show_image(image)
+        # with torch.no_grad():
+        #     debug_score_sort = torch.argsort(rpn_debug_score, descending=True)
+        #     rpn_debug_score = rpn_debug_score[debug_score_sort][:4]
+        #     roi = roi[debug_score_sort][:4]
+        #     image = imgs.data
+        #     image = self.plot(image, _bbox, color=255)
+        #     image = self.plot(image, roi, (0, 255, 0), score=rpn_debug_score)
+        #     # image = self.plot(image, sample_roi[gt_roi_label == 0], (255, 0, 0))
+        #     self.vis_server.show_image(image)
         # -----------------------------------------------------------------------------#
 
         # ----------------------------debug for ROI--------------------------------------#
@@ -160,6 +178,11 @@ class Net(LightningModule):
             import traceback
             traceback.print_exc()
             return None
+    
+    def training_epoch_end(self, outputs):
+        acc = self.compute_accuracy(self.rpn_cm)
+        if self.reporter is not None:
+            self.reporter(accuracy=acc, epoch=self.current_epoch)
 
     def test_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx):
         """
@@ -179,7 +202,7 @@ class Net(LightningModule):
         return batch_idx
 
     def configure_optimizers(self):
-        return optim.SGD(self.parameters(), lr=1e-4, weight_decay=1e-8, momentum=0.1)
+        return optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
 
     @staticmethod
     @torch.no_grad()
@@ -205,6 +228,11 @@ class Net(LightningModule):
                           (bbox[3], bbox[2]), color=color, thickness=5)
         return img
 
+    def compute_accuracy(self, cm: ConfusionMeter):
+        val = cm.value()
+        [[tp, fn], [fp, tn]] = val
+        return (tp + tn) / (tp + tn + fp + fn)
+        
 
 def _smooth_l1_loss(x: torch.Tensor, t: torch.Tensor, in_weight: torch.Tensor, sigma):
     sigma2 = sigma ** 2
