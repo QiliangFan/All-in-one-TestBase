@@ -1,5 +1,9 @@
 from pytorch_lightning import LightningModule
 from collections import namedtuple
+from utils.bbox_tools import loc2box
+from utils.creator_tool import _get_inside_index
+
+from torch.optim import lr_scheduler
 from utils.creator_tool import AnchorTargetCreator, ProposalTargetCreator
 import torch
 from torch import nn
@@ -131,35 +135,35 @@ class Net(LightningModule):
         losses = losses + [sum(losses)]
 
         # -----------------------------debug for RPN-----------------------------------#
-        # with torch.no_grad():
-        #     debug_score_sort = torch.argsort(rpn_debug_score, descending=True)
-        #     rpn_debug_score = rpn_debug_score[debug_score_sort][:4]
-        #     roi = roi[debug_score_sort][:4]
-        #     image = imgs.data
-        #     image = self.plot(image, _bbox, color=255)
-        #     image = self.plot(image, roi, (0, 255, 0), score=rpn_debug_score)
-        #     # image = self.plot(image, sample_roi[gt_roi_label == 0], (255, 0, 0))
-        #     self.vis_server.show_image(image)
+        with torch.no_grad():
+            debug_score_sort = torch.argsort(rpn_debug_score, descending=True)
+            rpn_debug_score = rpn_debug_score[debug_score_sort][:4]
+            roi = roi[debug_score_sort][:4]
+            image = imgs.data
+            image = self.plot(image, _bbox, color=255)
+            image = self.plot(image, roi, (0, 255, 0), score=rpn_debug_score)
+            # image = self.plot(image, sample_roi[gt_roi_label == 0], (255, 0, 0))
+            self.vis_server.show_image(image)
         # -----------------------------------------------------------------------------#
 
         # ----------------------------debug for ROI--------------------------------------#
-        # with torch.no_grad():
-        #     pred_bbox = loc2box(sample_roi, roi_cls_loc[:, -1].view(-1, 4))
+        with torch.no_grad():
+            pred_bbox = loc2box(sample_roi, roi_cls_loc[:, -1].view(-1, 4))
 
-        #     img_H, img_W = imgs.shape[-2], imgs.shape[-1]
-        #     inside_index = _get_inside_index(pred_bbox, img_H, img_W)
-        #     pred_bbox = pred_bbox[inside_index]
-        #     roi_score = roi_score[inside_index]
+            img_H, img_W = imgs.shape[-2], imgs.shape[-1]
+            inside_index = _get_inside_index(pred_bbox, img_H, img_W)
+            pred_bbox = pred_bbox[inside_index]
+            roi_score = roi_score[inside_index]
 
-        #     argsort = torch.argsort(roi_score[:, -1]).flip(dims=[0])
-        #     sample_roi = sample_roi[argsort]
-        #     roi_cls_loc = roi_cls_loc[argsort]
-        #     pred_bbox = pred_bbox[:8]
-        #     roi_score = roi_score[:, 1][:8]
-        #     img = imgs[0].data
-        #     img = self.plot(img, _bbox)
-        #     img = self.plot(img, pred_bbox, (255, 0, 0), score=roi_score)
-        #     self.vis_server.show_image(img)
+            argsort = torch.argsort(roi_score[:, -1]).flip(dims=[0])
+            sample_roi = sample_roi[argsort]
+            roi_cls_loc = roi_cls_loc[argsort]
+            pred_bbox = pred_bbox[:8]
+            roi_score = roi_score[:, 1][:8]
+            img = imgs[0].data
+            img = self.plot(img, _bbox)
+            img = self.plot(img, pred_bbox, (255, 0, 0), score=roi_score)
+            self.vis_server.show_image(img)
         # --------------------------------------------------------------------------------#
 
         return LossTuple(*losses)
@@ -202,7 +206,15 @@ class Net(LightningModule):
         return batch_idx
 
     def configure_optimizers(self):
-        return optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+        opt =  optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+        lr_sche = lr_scheduler.LambdaLR(opt, lambda step: self.lr if step > 4000 else self.lr / 1200 + self.lr / 2000 * step)
+        return {
+            "optimizer": opt,
+            "lr_scheduler": {
+                "scheduler": lr_sche,
+                "interval": "step"
+            }
+        }
 
     @staticmethod
     @torch.no_grad()

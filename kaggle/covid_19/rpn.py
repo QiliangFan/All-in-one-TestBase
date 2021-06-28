@@ -4,11 +4,12 @@ from torch.nn import functional as F
 import torch
 from torch import nn
 from utils.bbox_tools import generate_anchor_base
+from resnet import BasicBlock
 
 
 class RPN(nn.Module):
 
-    def __init__(self, mid_channels=512, ratios=[0.5, 1, 2],
+    def __init__(self,in_channel, mid_channels=512, ratios=[0.5, 1, 2],
                  anchor_scales=[8, 16, 32], feat_size=16, proposal_creator_params=dict()
                  ):
         super().__init__()
@@ -17,19 +18,13 @@ class RPN(nn.Module):
         self.feat_size = feat_size
         self.proposal_layer = ProposalCreator(self, **proposal_creator_params)
         n_anchor = self.anchor_base.shape[0]  # 每个像素多少个anchor
-        self.conv1 = nn.Conv2d(512, mid_channels, 3, 1, 1, bias=True)
-        # self.score = nn.Conv2d(mid_channels, n_anchor*2, 1, 1, 0)
-        self.score = nn.Sequential(
-            nn.Conv2d(mid_channels, n_anchor * 2, kernel_size=3, stride=1, padding=1)
+        self.conv1 = nn.Sequential(
+            BasicBlock(in_channel, mid_channels),
+            BasicBlock(mid_channels, mid_channels),
+            BasicBlock(mid_channels, mid_channels)
         )
-        # self.loc = nn.Conv2d(mid_channels, n_anchor*4, 1, 1, 0)
-        self.loc = nn.Sequential(
-            nn.Dropout(),
-            nn.Conv2d(mid_channels, mid_channels, kernel_size=1, stride=1, padding=0, bias=False),
-            nn.BatchNorm2d(mid_channels),
-            nn.ReLU(True),
-            nn.Conv2d(mid_channels, n_anchor*4, kernel_size=3, stride=1, padding=1)
-        )
+        self.score = BasicBlock(mid_channels, n_anchor * 2)
+        self.loc = BasicBlock(mid_channels, n_anchor * 4)
 
     def forward(self, x: torch.Tensor, img_size):
         n, _, hh, ww = x.shape

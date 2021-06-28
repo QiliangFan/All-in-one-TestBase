@@ -28,12 +28,19 @@ def generate_annotation(data_root: str, label_csv: str, img_save_dir: str, save_
     dt = pd.read_csv(label_csv)
 
     annotation_json = {
+        "info": {
+            "year": 2021,
+            "version": "0.0.1",
+            "description": "covid19-coco",
+            "contributor": "liang"
+        },
         "images": [],
         "annotations": [],
         "categories": [
             {
-                "id": 0,
-                "name": "target",
+                "id": 1,
+                "name": "pneumonia",
+                "supercategory": "target"
             }
         ]
     }
@@ -70,9 +77,11 @@ def generate_annotation(data_root: str, label_csv: str, img_save_dir: str, save_
         for y1, x1, y2, x2 in _bboxs:
             annotation = {
                 "id": annotation_idx,
-                "image_id": f"{i}",
+                "image_id": i,
+                "category_id": 1,
                 "bbox": [x1, y1, x2-x1, y2-y1],
-                "iscrowd": 1
+                "area": (x2-x1) * (y2 - y1),
+                "iscrowd": False
             }
             annotation_idx += 1
             annotation_json["annotations"].append(annotation)

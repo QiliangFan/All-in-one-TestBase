@@ -45,15 +45,15 @@ def train(mid_channel = 512, lr = 1e-4, weight_decay = 1e-8, epochs = 1, reporte
     # trainer.test(net, datamodule=data)
 
 if __name__ == "__main__":
+    train()
+    # with autogluon.utils.warning_filter():
+    #     scheduler = sc.FIFOScheduler(search,
+    #         num_trials = 50,
+    #         resource={"num_gpus": 2}, 
+    #         time_attr="epoch",
+    #         reward_attr="accuracy")
+    #     scheduler.run()
+    #     scheduler.join_jobs()
 
-    with autogluon.utils.warning_filter():
-        scheduler = sc.FIFOScheduler(search,
-            num_trials = 50,
-            resource={"num_gpus": 2}, 
-            time_attr="epoch",
-            reward_attr="accuracy")
-        scheduler.run()
-        scheduler.join_jobs()
-
-    print(f"Best config: {scheduler.get_best_config()}")
-    print(f"Best reward: {scheduler.get_best_reward()}")
+    # print(f"Best config: {scheduler.get_best_config()}")
+    # print(f"Best reward: {scheduler.get_best_reward()}")

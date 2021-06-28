@@ -1,110 +1,12 @@
 import torch
 from torch import nn
+from torch.nn.modules.batchnorm import BatchNorm2d
 from faster_rcnn import FasterRCNN
 from rpn import RPN
 from torchvision.ops import RoIPool
-from typing import Union, List, Dict, cast, Any
-
-
-class VGG(nn.Module):
-
-    def __init__(
-        self,
-        features: nn.Module,
-        num_classes: int = 1000,
-        init_weights: bool = True
-    ) -> None:
-        super(VGG, self).__init__()
-        self.features = features
-        self.avgpool = nn.AdaptiveAvgPool2d((7, 7))
-        self.classifier = nn.Sequential(
-            nn.Linear(512 * 7 * 7, 512),
-            nn.ReLU(True),
-            # nn.Dropout(),
-            nn.Linear(512, 512),
-            nn.ReLU(True),
-            # nn.Dropout(),
-            nn.Linear(512, 512),
-        )
-        if init_weights:
-            self._initialize_weights()
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.features(x)
-        x = self.avgpool(x)
-        x = torch.flatten(x, 1)
-        x = self.classifier(x)
-        return x
-
-    def _initialize_weights(self) -> None:
-        for m in self.modules():
-            if isinstance(m, nn.Conv2d):
-                nn.init.kaiming_normal_(
-                    m.weight, mode='fan_out', nonlinearity='relu')
-                if m.bias is not None:
-                    nn.init.constant_(m.bias, 0)
-            elif isinstance(m, nn.BatchNorm2d):
-                nn.init.constant_(m.weight, 1)
-                nn.init.constant_(m.bias, 0)
-            elif isinstance(m, nn.Linear):
-                nn.init.normal_(m.weight, 0, 0.01)
-                nn.init.constant_(m.bias, 0)
-
-
-def make_layers(cfg: List[Union[str, int]], batch_norm: bool = False) -> nn.Sequential:
-    layers: List[nn.Module] = []
-    in_channels = 1
-    for v in cfg:
-        if v == 'M':
-            layers += [nn.MaxPool2d(kernel_size=2, stride=2)]
-        else:
-            v = cast(int, v)
-            conv2d = nn.Conv2d(in_channels, v, kernel_size=3, padding=1)
-            if batch_norm:
-                layers += [conv2d, nn.ReLU(True)]
-            else:
-                layers += [conv2d, nn.ReLU(True)]
-            in_channels = v
-    return nn.Sequential(*layers)
-
-
-cfgs: Dict[str, List[Union[str, int]]] = {
-    'A': [64, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M'],
-    'B': [64, 64, 'M', 128, 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M'],
-    'D': [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 'M', 512, 512, 512, 'M', 512, 512, 512, 'M'],
-    'E': [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 256, 'M', 512, 512, 512, 512, 'M', 512, 512, 512, 512, 'M'],
-}
-
-
-def _vgg(arch: str, cfg: str, batch_norm: bool, pretrained: bool, progress: bool, **kwargs: Any) -> VGG:
-    if pretrained:
-        kwargs['init_weights'] = False
-    model = VGG(make_layers(cfgs[cfg], batch_norm=batch_norm), **kwargs)
-    return model
-
-
-def vgg16(pretrained: bool = False, progress: bool = True, **kwargs) -> VGG:
-    r"""VGG 16-layer model (configuration "D")
-    `"Very Deep Convolutional Networks For Large-Scale Image Recognition" <https://arxiv.org/pdf/1409.1556.pdf>`._
-
-    Args:
-        pretrained (bool): If True, returns a model pre-trained on ImageNet
-        progress (bool): If True, displays a progress bar of the download to stderr
-    """
-    return _vgg('vgg16', 'D', False, pretrained, progress, **kwargs)
-
-
-def decom_vgg16():
-    model = vgg16()
-
-    features = list(model.features)[:30]
-    classifier = model.classifier
-    classifier = list(classifier)
-
-    features = nn.Sequential(*features)
-    classifier = nn.Sequential(*classifier)
-    return features, classifier
-
+from collections import OrderedDict
+from torch.nn import Sequential
+from resnet import ResNet
 
 class FasterRCNNVGG(FasterRCNN):
     feat_stride = 16
@@ -114,9 +16,10 @@ class FasterRCNNVGG(FasterRCNN):
                  n_fg_class=20,
                  ratios=[0.5, 1, 2],
                  anchor_scales=[8, 16, 32]):
-        extractor, classifier = decom_vgg16()
+        extractor = ResNet(in_channel=1, layers=50)   # self-defined resnet(only with extractor)
 
         rpn = RPN(
+            extractor.last_channel,
             mid_channel,
             ratios=ratios,
             anchor_scales=anchor_scales,
@@ -130,13 +33,14 @@ class FasterRCNNVGG(FasterRCNN):
             n_class=n_fg_class + 1,
             roi_size=7,
             spatial_scale=(1. / self.feat_stride),
+            in_channel = extractor.last_channel
         )
 
         super().__init__(extractor, rpn, head)
 
 
 class VGGROIHead(nn.Module):
-    def __init__(self, n_class, roi_size, spatial_scale):
+    def __init__(self, n_class, roi_size, spatial_scale, in_channel):
         """[summary]
 
         Args:
@@ -148,7 +52,7 @@ class VGGROIHead(nn.Module):
         super(VGGROIHead, self).__init__()
 
         self.classifier = nn.Sequential(
-            nn.Linear(512 * 7 * 7, 1024),
+            nn.Linear(in_channel * 7 * 7, 1024),
             nn.ReLU(True),
             nn.Dropout(),
             # nn.Linear(1024, 1024),

@@ -1,0 +1,1 @@
+nvidia-docker run --network host --name paddle -it -v $PWD:/paddle -v /home/maling/fanqiliang/data:/home/maling/fanqiliang/data registry.baidubce.com/paddlepaddle/paddle:2.1.0-gpu-cuda10.2-cudnn7 /bin/bash
