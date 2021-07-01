@@ -76,8 +76,7 @@ class VGGROIHead(nn.Module):
         roi_indices = roi_indices.to(dtype=torch.float32, device=x.device)
         rois = rois.to(dtype=torch.float32, device=x.device)
         indices_and_rois = torch.cat([roi_indices[:, None], rois], dim=1)
-        xy_indices_and_rois = indices_and_rois
-        # xy_indices_and_rois = indices_and_rois[:, [0, 2, 1, 4, 3]]  # yx -> xy
+        xy_indices_and_rois = indices_and_rois[:, [0, 2, 1, 4, 3]]  # yx -> xy
         indices_and_rois = xy_indices_and_rois.contiguous()
 
         pool: torch.Tensor = self.roi(x, indices_and_rois)

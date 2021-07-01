@@ -59,15 +59,17 @@ class ImageData(Dataset):
             img = (img - img.min()) / (img.max() - img.min())
             img = zoom(img, zoom=(1, 1/scale, 1/scale))
 
-            return torch.as_tensor(img), torch.as_tensor(bboxs), torch.as_tensor(label), scale
+            return torch.as_tensor(img), torch.as_tensor(bboxs), torch.as_tensor(label), scale, _id, _study_instance
         else:
             img_path = self.files[idx]
+            _id = os.path.splitext(os.path.basename(img_path))[0]
+            _study_instance = os.path.basename(os.path.dirname(os.path.dirname(img_path)))
             img: np.ndarray = sitk.GetArrayFromImage(
                 sitk.ReadImage(img_path)).astype(np.float32)
             img = (img - img.min()) / (img.max() - img.min())
             img = zoom(img, zoom=(1, 1/scale, 1/scale))
             
-            return torch.as_tensor(img), scale
+            return torch.as_tensor(img), scale, _id, _study_instance
 
     def __len__(self):
         if self.csv is not None:

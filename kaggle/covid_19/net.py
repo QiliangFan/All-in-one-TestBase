@@ -142,21 +142,18 @@ class Net(LightningModule):
 
         # -----------------------------debug for RPN-----------------------------------#
         with torch.no_grad():
-            # debug_dpn_nums = 4
-            # roi = roi[torch.where(rpn_debug_score > 0.5)[0]]
-            # rpn_debug_score = rpn_debug_score[rpn_debug_score > 0.5]
-            # debug_score_sort = torch.argsort(rpn_debug_score, descending=True)
-            # rpn_debug_score = rpn_debug_score[debug_score_sort][:debug_dpn_nums]
-            # roi = roi[debug_score_sort][:debug_dpn_nums]
-            # image = imgs.data
-            # image = self.plot(image, _bbox, color=255)
-            # image = self.plot(image, roi, (0, 255, 0), score=rpn_debug_score)
-            # self.vis_server.show_image(image)
-
-            _sample_roi = sample_roi[torch.where(gt_roi_label > 0)[0]]
+            debug_dpn_nums = 6
+            roi = roi[torch.where(rpn_debug_score > 0.5)[0]]
+            rpn_debug_score = rpn_debug_score[rpn_debug_score > 0.5]
+            debug_score_sort = torch.argsort(rpn_debug_score, descending=True)
+            rpn_debug_score = rpn_debug_score[debug_score_sort][:debug_dpn_nums]
+            roi = roi[debug_score_sort][:debug_dpn_nums]
             image = imgs.data
             image = self.plot(image, _bbox, color=255)
-            image = self.plot(image, _sample_roi[:4], (0, 255, 0))
+            image = self.plot(image, roi, (0, 255, 0), score=rpn_debug_score)
+
+            _sample_roi = sample_roi[torch.where(gt_roi_label > 0)[0]]
+            image = self.plot(image, _sample_roi[:6], (255, 215, 0))
             self.vis_server.show_image(image)
         # -----------------------------------------------------------------------------#
 
@@ -185,15 +182,13 @@ class Net(LightningModule):
 
         return LossTuple(*losses)
 
-    def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor], batch_idx):
+    def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor], batch_idx):
         """
         batch size只能为1
         """
         try:
-            imgs, bboxes, labels, scale = batch
+            imgs, bboxes, labels, scale, img_id, instance_id = batch
             losses = self.forward(imgs, bboxes, labels, scale)
-            #     self.vis_server.plot([losses.total_loss],
-            #                          batch_idx, "train loss")
             return losses.total_loss
         except:
             import traceback
@@ -206,11 +201,11 @@ class Net(LightningModule):
         if self.reporter is not None:
             self.reporter(accuracy=acc, epoch=self.current_epoch)
 
-    def test_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx):
+    def test_step(self, batch: Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor], batch_idx):
         """
         bacth size只能为1
         """
-        imgs, scale = batch
+        imgs, scale, img_id, instance_id = batch
         bboxes, labels, scores = self.faster_rcnn.predict(
             imgs, [imgs.shape[2:]])
         # since batch size = 1
