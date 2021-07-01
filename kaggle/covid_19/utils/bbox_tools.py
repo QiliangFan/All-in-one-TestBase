@@ -28,8 +28,8 @@ def loc2box(src_bbox: torch.Tensor, loc: torch.Tensor):
 
     src_height = src_bbox[:, 2] - src_bbox[:, 0]
     src_weight = src_bbox[:, 3] - src_bbox[:, 1]
-    src_c_y = src_bbox[:, 0] + 0.5 * src_weight
-    src_c_x = src_bbox[:, 1] + 0.5 * src_height
+    src_c_y = src_bbox[:, 0] + 0.5 * src_height
+    src_c_x = src_bbox[:, 1] + 0.5 * src_weight
 
     dy = loc[:, 0::4]
     dx = loc[:, 1::4]

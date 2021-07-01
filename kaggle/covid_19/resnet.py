@@ -16,12 +16,12 @@ class BasicBlock(nn.Module):
             stride = 1
             self.short_cut = nn.Conv2d(in_channel, out_channel, kernel_size=1, padding=0, stride=stride)
         self.conv1 = nn.Conv2d(in_channel, in_channel, kernel_size=3, padding=1, stride=stride, bias=not self.bn)
-        self.bn1 = nn.BatchNorm2d(in_channel)
-        self.relu1 = nn.ReLU()
+        self.bn1 = nn.InstanceNorm2d(in_channel)
+        self.relu1 = nn.LeakyReLU()
 
         self.conv2 = nn.Conv2d(in_channel, out_channel, kernel_size=3, padding=1, stride=1, bias=not self.bn)
-        self.bn2 = nn.BatchNorm2d(out_channel)
-        self.relu2 = nn.ReLU()
+        self.bn2 = nn.InstanceNorm2d(out_channel)
+        self.relu2 = nn.LeakyReLU()
 
     def forward(self, x):
         if self.short_cut is not None:
@@ -59,19 +59,19 @@ class BottleneckBlock(nn.Module):
         
         self.conv1 = nn.Sequential(
             nn.Conv2d(in_channel, out_channel, kernel_size=1, padding=0, stride=1, bias=False),
-            nn.BatchNorm2d(out_channel),
-            nn.ReLU()
+            nn.InstanceNorm2d(out_channel),
+            nn.LeakyReLU()
         )
 
         self.conv2 = nn.Sequential(
             nn.Conv2d(out_channel, out_channel, kernel_size=3, padding=1, stride=stride, bias=False),
-            nn.BatchNorm2d(out_channel),
-            nn.ReLU()
+            nn.InstanceNorm2d(out_channel),
+            nn.LeakyReLU()
         )
 
         self.conv3 = nn.Sequential(
             nn.Conv2d(out_channel, out_channel * self.expansion, kernel_size=1, padding=0, stride=1, bias=False),
-            nn.BatchNorm2d(out_channel * self.expansion),
+            nn.InstanceNorm2d(out_channel * self.expansion),
             nn.ReLU()
         )
 
@@ -105,7 +105,7 @@ class ResNet(nn.Module):
         assert len(self.blocks) > 0
         
         ch = 64
-        self.layer1 = nn.Conv2d(in_channel, ch, kernel_size=7, padding=3, stride=2)
+        self.layer1 = nn.Conv2d(in_channel, ch, kernel_size=3, padding=1, stride=2)
 
         layer2 = OrderedDict()
         layer2["layer2_pool"] = nn.MaxPool2d(kernel_size=3, stride=2)

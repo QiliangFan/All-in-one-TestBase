@@ -4,19 +4,17 @@ from torch.nn.modules.batchnorm import BatchNorm2d
 from faster_rcnn import FasterRCNN
 from rpn import RPN
 from torchvision.ops import RoIPool
-from collections import OrderedDict
-from torch.nn import Sequential
 from resnet import ResNet
 
 class FasterRCNNVGG(FasterRCNN):
-    feat_stride = 16
+    feat_stride = 32
 
     def __init__(self,
                  mid_channel,
                  n_fg_class=20,
                  ratios=[0.5, 1, 2],
                  anchor_scales=[8, 16, 32]):
-        extractor = ResNet(in_channel=1, layers=101)   # self-defined resnet(only with extractor)
+        extractor = ResNet(in_channel=1, layers=34)   # self-defined resnet(only with extractor)
 
         rpn = RPN(
             extractor.last_channel,
@@ -26,6 +24,7 @@ class FasterRCNNVGG(FasterRCNN):
             feat_size=self.feat_stride,
             proposal_creator_params={
                 "min_size": 8,
+                "n_train_post_nms": 4000,
             }
         )
 
@@ -52,18 +51,17 @@ class VGGROIHead(nn.Module):
         super(VGGROIHead, self).__init__()
 
         self.classifier = nn.Sequential(
-            nn.Linear(in_channel * roi_size * roi_size, in_channel),
+            nn.Linear(in_channel * roi_size * roi_size, in_channel * roi_size),
             # nn.ReLU(True),
-            # nn.Dropout(),
-            nn.Linear(in_channel, in_channel),
+            nn.Dropout(),
+            nn.Linear(in_channel * roi_size, in_channel),
+            nn.Dropout(),
             # nn.ReLU(True)
         )
         self.cls_loc = nn.Sequential(
-            nn.Linear(in_channel, in_channel),
             nn.Linear(in_channel, n_class * 4)
         )
         self.score = nn.Sequential(
-            nn.Linear(in_channel, in_channel),
             nn.Linear(in_channel, n_class),
             # nn.Sigmoid(),
             nn.Softmax(dim=1)
@@ -78,7 +76,8 @@ class VGGROIHead(nn.Module):
         roi_indices = roi_indices.to(dtype=torch.float32, device=x.device)
         rois = rois.to(dtype=torch.float32, device=x.device)
         indices_and_rois = torch.cat([roi_indices[:, None], rois], dim=1)
-        xy_indices_and_rois = indices_and_rois[:, [0, 2, 1, 4, 3]]  # yx -> xy
+        xy_indices_and_rois = indices_and_rois
+        # xy_indices_and_rois = indices_and_rois[:, [0, 2, 1, 4, 3]]  # yx -> xy
         indices_and_rois = xy_indices_and_rois.contiguous()
 
         pool: torch.Tensor = self.roi(x, indices_and_rois)

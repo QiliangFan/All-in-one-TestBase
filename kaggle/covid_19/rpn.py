@@ -19,25 +19,30 @@ class RPN(nn.Module):
         self.proposal_layer = ProposalCreator(self, **proposal_creator_params)
         n_anchor = self.anchor_base.shape[0]  # 每个像素多少个anchor
         self.conv1 = nn.Sequential(
-            nn.Conv2d(in_channel, mid_channels, kernel_size=3, padding=1, stride=1),
+            # nn.Conv2d(in_channel, mid_channels, kernel_size=3, padding=1, stride=1),
+            BasicBlock(in_channel, mid_channels, bn=False),
             nn.Dropout(),
-            nn.Conv2d(mid_channels, mid_channels, kernel_size=3, padding=1, stride=1),
+            # nn.Conv2d(mid_channels, mid_channels, kernel_size=3, padding=1, stride=1),
+            BasicBlock(mid_channels, mid_channels, bn=False),
+            nn.Dropout(),
+            # nn.Conv2d(mid_channels, mid_channels, kernel_size=3, padding=1, stride=1),
+            BasicBlock(mid_channels, mid_channels, bn=False),
+            nn.Dropout(),
         )
         self.score = nn.Sequential(
             # BasicBlock(mid_channels, mid_channels, relu=False, bn=False),
             # nn.Dropout(),
-            # BasicBlock(mid_channels, mid_channels, relu=False, bn=False),
-            nn.Conv2d(mid_channels, mid_channels, kernel_size=3, padding=1, stride=1),
-            nn.Conv2d(mid_channels, n_anchor * 2, kernel_size=3, padding=1, stride=1),
+            BasicBlock(mid_channels, n_anchor * 2, relu=False, bn=False),
+            # nn.Conv2d(mid_channels, n_anchor * 2, kernel_size=3, padding=1, stride=1),
+            nn.Softmax(dim=1)
             # BasicBlock(mid_channels, n_anchor * 2, relu=False, bn=False)
         )
         self.loc = nn.Sequential(
             # BasicBlock(mid_channels, mid_channels, relu=True, bn=False),
             # nn.Dropout(),
             # BasicBlock(mid_channels, mid_channels, relu=False, bn=False),
-            # BasicBlock(mid_channels, n_anchor * 4, relu=False, bn=False),
-            nn.Conv2d(mid_channels, mid_channels, kernel_size=3, padding=1, stride=1),
-            nn.Conv2d(mid_channels, n_anchor * 4, kernel_size=3, padding=1, stride=1)
+            BasicBlock(mid_channels, n_anchor * 4, relu=False, bn=False),
+            # nn.Conv2d(mid_channels, n_anchor * 4, kernel_size=3, padding=1, stride=1)
         ) 
 
     def forward(self, x: torch.Tensor, img_size):

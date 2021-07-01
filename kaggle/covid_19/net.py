@@ -48,7 +48,7 @@ class Net(LightningModule):
 
         # 利用gt-bbox将anchor 转为 gt-loc, gt-label
         self.anchor_target_creator = AnchorTargetCreator(pos_iou_thresh=0.7)
-        self.proposal_target_creator = ProposalTargetCreator()
+        self.proposal_target_creator = ProposalTargetCreator(pos_ratio=0.9)
 
         self.loc_normalize_mean = faster_rcnn.loc_normalize_mean
         self.loc_normalize_std = faster_rcnn.loc_normalize_std
@@ -98,10 +98,10 @@ class Net(LightningModule):
         gt_rpn_loc, gt_rpn_label = self.anchor_target_creator(
             _bbox, anchor, img_size)
         gt_rpn_label = gt_rpn_label.long()
-        rpn_loc_loss = self.smooth_loss(
-            rpn_loc[gt_rpn_label > 0], gt_rpn_loc[gt_rpn_label > 0])
-        # rpn_loc_loss = _fast_rcnn_loc_loss(
-        #     rpn_loc, gt_rpn_loc, gt_rpn_label.data, 1)
+        # rpn_loc_loss = self.smooth_loss(
+        #     rpn_loc[gt_rpn_label > 0], gt_rpn_loc[gt_rpn_label > 0])
+        rpn_loc_loss = _fast_rcnn_loc_loss(
+            rpn_loc, gt_rpn_loc, gt_rpn_label.data, 1)
 
         rpn_cls_loss = F.cross_entropy(
             rpn_score, gt_rpn_label, ignore_index=-1)
@@ -136,21 +136,27 @@ class Net(LightningModule):
             roi_loc_loss,
             roi_cls_loss
         ]
-        self.log_dict({"rpn_loc": rpn_loc_loss, "rpn_cls": rpn_cls_loss,
-                       "roi_loc": roi_loc_loss, "roi_cls": roi_cls_loss}, prog_bar=True)
+        # self.log_dict({"rpn_loc": rpn_loc_loss, "rpn_cls": rpn_cls_loss,
+        #                "roi_loc": roi_loc_loss, "roi_cls": roi_cls_loss}, prog_bar=True)
         losses = losses + [sum(losses)]
 
         # -----------------------------debug for RPN-----------------------------------#
         with torch.no_grad():
-            roi = roi[torch.where(rpn_debug_score > 0.5)[0]]
-            rpn_debug_score = rpn_debug_score[rpn_debug_score > 0.5]
-            debug_score_sort = torch.argsort(rpn_debug_score, descending=True)
-            rpn_debug_score = rpn_debug_score[debug_score_sort][:5]
-            roi = roi[debug_score_sort][:5]
+            # debug_dpn_nums = 4
+            # roi = roi[torch.where(rpn_debug_score > 0.5)[0]]
+            # rpn_debug_score = rpn_debug_score[rpn_debug_score > 0.5]
+            # debug_score_sort = torch.argsort(rpn_debug_score, descending=True)
+            # rpn_debug_score = rpn_debug_score[debug_score_sort][:debug_dpn_nums]
+            # roi = roi[debug_score_sort][:debug_dpn_nums]
+            # image = imgs.data
+            # image = self.plot(image, _bbox, color=255)
+            # image = self.plot(image, roi, (0, 255, 0), score=rpn_debug_score)
+            # self.vis_server.show_image(image)
+
+            _sample_roi = sample_roi[torch.where(gt_roi_label > 0)[0]]
             image = imgs.data
             image = self.plot(image, _bbox, color=255)
-            image = self.plot(image, roi, (0, 255, 0), score=rpn_debug_score)
-            # image = self.plot(image, sample_roi[gt_roi_label == 0], (255, 0, 0))
+            image = self.plot(image, _sample_roi[:4], (0, 255, 0))
             self.vis_server.show_image(image)
         # -----------------------------------------------------------------------------#
 
@@ -192,6 +198,7 @@ class Net(LightningModule):
         except:
             import traceback
             traceback.print_exc()
+            exit(-1)
             return None
     
     def training_epoch_end(self, outputs):
@@ -218,14 +225,14 @@ class Net(LightningModule):
 
     def configure_optimizers(self):
         warm_up_step = 500
-        opt =  optim.SGD(self.parameters(), lr=self.lr, weight_decay=self.weight_decay, momentum=0.1, nesterov=True)
+        opt =  optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
         lr_sche = lr_scheduler.LambdaLR(opt, lambda step: self.lr if step > warm_up_step else self.lr / 1200 + self.lr / warm_up_step * step)
         return {
             "optimizer": opt,
-            "lr_scheduler": {
-                "scheduler": lr_sche,
-                "interval": "step"
-            }
+            # "lr_scheduler": {
+            #     "scheduler": lr_sche,
+            #     "interval": "step"
+            # }
         }
 
     @staticmethod

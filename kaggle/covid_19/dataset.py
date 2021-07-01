@@ -44,6 +44,7 @@ class ImageData(Dataset):
                 self.data_root, "**", "*.dcm"), recursive=True)
 
     def __getitem__(self, idx: int):
+        scale = 4
         if self.csv is not None:
             _id = self.ids[idx]
             _bbox = self.bboxes[idx]
@@ -56,17 +57,17 @@ class ImageData(Dataset):
             img: np.ndarray = sitk.GetArrayFromImage(
                 sitk.ReadImage(img_path, imageIO="GDCMImageIO")).astype(np.float32)
             img = (img - img.min()) / (img.max() - img.min())
-            img = zoom(img, zoom=(1, 1/4, 1/4))
+            img = zoom(img, zoom=(1, 1/scale, 1/scale))
 
-            return torch.as_tensor(img), torch.as_tensor(bboxs), torch.as_tensor(label), 4
+            return torch.as_tensor(img), torch.as_tensor(bboxs), torch.as_tensor(label), scale
         else:
             img_path = self.files[idx]
             img: np.ndarray = sitk.GetArrayFromImage(
                 sitk.ReadImage(img_path)).astype(np.float32)
             img = (img - img.min()) / (img.max() - img.min())
-            img = zoom(img, zoom=(1, 1/4, 1/4))
+            img = zoom(img, zoom=(1, 1/scale, 1/scale))
             
-            return torch.as_tensor(img), 4
+            return torch.as_tensor(img), scale
 
     def __len__(self):
         if self.csv is not None:
