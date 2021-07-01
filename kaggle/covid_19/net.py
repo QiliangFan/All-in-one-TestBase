@@ -10,13 +10,13 @@ from torch import nn
 from torch import optim
 from torchnet.meter import ConfusionMeter, AverageValueMeter
 from torch.nn import functional as F
-from typing import Union, Tuple
+from typing import Union, Tuple, cast
 import cv2
 import numpy as np
 from visdom_utils import ImageShow
-import autogluon.core as ag
 from fast_rcnn_vgg import FasterRCNNVGG
 from autogluon.core.scheduler.reporter import LocalStatusReporter
+from pytorch_lightning import Trainer
 
 
 LossTuple = namedtuple("LossTuple", [
@@ -37,13 +37,17 @@ class Net(LightningModule):
 
         self.vis_server = ImageShow()
 
-        faster_rcnn = FasterRCNNVGG(mid_channel=self.mid_channel, n_fg_class=1, ratios=[
-                                    0.25, 1, 4], anchor_scales=[4, 8, 16])
+        faster_rcnn = FasterRCNNVGG(
+            mid_channel=self.mid_channel, 
+            n_fg_class=1, 
+            ratios=[0.5, 1, 2], 
+            anchor_scales=[4, 8, 16]
+        )
         self.faster_rcnn = faster_rcnn
         self.num_classes = faster_rcnn.n_class
 
         # 利用gt-bbox将anchor 转为 gt-loc, gt-label
-        self.anchor_target_creator = AnchorTargetCreator(pos_iou_thresh=0.5)
+        self.anchor_target_creator = AnchorTargetCreator(pos_iou_thresh=0.7)
         self.proposal_target_creator = ProposalTargetCreator()
 
         self.loc_normalize_mean = faster_rcnn.loc_normalize_mean
@@ -119,14 +123,16 @@ class Net(LightningModule):
             gt_roi_label.data,
         )
         roi_cls_loss = F.cross_entropy(roi_score, gt_roi_label)
-        roi_cls_loss += F.binary_cross_entropy_with_logits(roi_score[:, -1], gt_roi_label.float(
-        ), pos_weight=torch.as_tensor([4], device=roi_score.device))
+        # roi_cls_loss += F.binary_cross_entropy_with_logits(roi_score[:, -1], gt_roi_label.float(
+        # ), pos_weight=torch.as_tensor([4], device=roi_score.device))
         with torch.no_grad():
             self.roi_cm.add(roi_score, gt_roi_label.long())
 
+        self.trainer = cast(Trainer, self.trainer)
+        rpn_factor = 2 if self.current_epoch < 10 else 1
         losses = [
-            rpn_loc_loss,
-            rpn_cls_loss * 10,
+            rpn_loc_loss * rpn_factor,
+            rpn_cls_loss * rpn_factor,
             roi_loc_loss,
             roi_cls_loss
         ]
@@ -135,15 +141,17 @@ class Net(LightningModule):
         losses = losses + [sum(losses)]
 
         # -----------------------------debug for RPN-----------------------------------#
-        # with torch.no_grad():
-        #     debug_score_sort = torch.argsort(rpn_debug_score, descending=True)
-        #     rpn_debug_score = rpn_debug_score[debug_score_sort][:4]
-        #     roi = roi[debug_score_sort][:4]
-        #     image = imgs.data
-        #     image = self.plot(image, _bbox, color=255)
-        #     image = self.plot(image, roi, (0, 255, 0), score=rpn_debug_score)
-        #     # image = self.plot(image, sample_roi[gt_roi_label == 0], (255, 0, 0))
-        #     self.vis_server.show_image(image)
+        with torch.no_grad():
+            roi = roi[torch.where(rpn_debug_score > 0.5)[0]]
+            rpn_debug_score = rpn_debug_score[rpn_debug_score > 0.5]
+            debug_score_sort = torch.argsort(rpn_debug_score, descending=True)
+            rpn_debug_score = rpn_debug_score[debug_score_sort][:5]
+            roi = roi[debug_score_sort][:5]
+            image = imgs.data
+            image = self.plot(image, _bbox, color=255)
+            image = self.plot(image, roi, (0, 255, 0), score=rpn_debug_score)
+            # image = self.plot(image, sample_roi[gt_roi_label == 0], (255, 0, 0))
+            self.vis_server.show_image(image)
         # -----------------------------------------------------------------------------#
 
         # ----------------------------debug for ROI--------------------------------------#
@@ -154,12 +162,15 @@ class Net(LightningModule):
             inside_index = _get_inside_index(pred_bbox, img_H, img_W)
             pred_bbox = pred_bbox[inside_index]
             roi_score = roi_score[inside_index]
+            roi_score = roi_score[:, 1]
+            roi_cls_loc = roi_cls_loc[torch.where(roi_score > 0.5)[0]]
+            pred_bbox = pred_bbox[torch.where(roi_score > 0.5)[0]]
+            roi_score = roi_score[torch.where(roi_score > 0.5)[0]]
 
-            argsort = torch.argsort(roi_score[:, -1]).flip(dims=[0])
-            sample_roi = sample_roi[argsort]
+            argsort = torch.argsort(roi_score, descending=True)
             roi_cls_loc = roi_cls_loc[argsort]
-            pred_bbox = pred_bbox[:8]
-            roi_score = roi_score[:, 1][:8]
+            pred_bbox = pred_bbox[:5]
+            roi_score = roi_score[:5]
             img = imgs[0].data
             img = self.plot(img, _bbox)
             img = self.plot(img, pred_bbox, (255, 0, 0), score=roi_score)
@@ -198,16 +209,17 @@ class Net(LightningModule):
         # since batch size = 1
         bboxes, labels, scores = bboxes[0], labels[0], scores[0]
         argsort = torch.argsort(scores).flip(dims=[0])
-        bboxes = bboxes[argsort[:32]]
-        labels = labels[argsort[:32]]
-        scores = scores[argsort[:32]]
-        img = self.plot(imgs[0], bboxes, batch_idx)
+        bboxes = bboxes[argsort[:2]]
+        labels = labels[argsort[:2]]
+        scores = scores[argsort[:2]]
+        img = self.plot(imgs[0], bboxes, (0, 0, 255), score=scores)
         self.vis_server.show_image(img)
         return batch_idx
 
     def configure_optimizers(self):
-        opt =  optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
-        lr_sche = lr_scheduler.LambdaLR(opt, lambda step: self.lr if step > 4000 else self.lr / 1200 + self.lr / 2000 * step)
+        warm_up_step = 500
+        opt =  optim.SGD(self.parameters(), lr=self.lr, weight_decay=self.weight_decay, momentum=0.1, nesterov=True)
+        lr_sche = lr_scheduler.LambdaLR(opt, lambda step: self.lr if step > warm_up_step else self.lr / 1200 + self.lr / warm_up_step * step)
         return {
             "optimizer": opt,
             "lr_scheduler": {

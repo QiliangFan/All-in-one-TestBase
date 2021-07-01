@@ -24,7 +24,7 @@ base_path = os.path.dirname(os.path.abspath(__file__))
 def search(args, reporter: LocalStatusReporter):
     train(args.mid_channel, args.lr, args.weight_decay, args.epochs, reporter)
 
-def train(mid_channel = 512, lr = 1e-4, weight_decay = 1e-8, epochs = 50, reporter: LocalStatusReporter = None):
+def train(mid_channel = 512, lr = 1e-3, weight_decay = 1e-9, epochs = 50, reporter: LocalStatusReporter = None):
     ckpts = glob(os.path.join(base_path, "ckpt", "*.ckpt"))
     if len(ckpts) > 0:
         ckpts.sort()
@@ -42,7 +42,7 @@ def train(mid_channel = 512, lr = 1e-4, weight_decay = 1e-8, epochs = 50, report
     net = Net(mid_channel, lr, weight_decay, reporter)
     data = ImageLevelData(train_root, image_level)
     trainer.fit(net, datamodule=data)
-    trainer.test(net, datamodule=data)
+    # trainer.test(net, datamodule=data)
 
 if __name__ == "__main__":
     train()

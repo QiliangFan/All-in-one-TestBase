@@ -4,19 +4,22 @@ from torch.nn import Sequential
 
 
 class BasicBlock(nn.Module):
-    def __init__(self, in_channel: int, out_channel: int, down_sample = False):
+    def __init__(self, in_channel: int, out_channel: int, down_sample = False, bn=True, relu=True):
         super().__init__()
+        self.bn = bn
+        self.relu = relu
+
         if down_sample:
             stride = 2
             self.short_cut = nn.Conv2d(in_channel, out_channel, kernel_size=3, padding=1, stride=stride)
         else:
             stride = 1
             self.short_cut = nn.Conv2d(in_channel, out_channel, kernel_size=1, padding=0, stride=stride)
-        self.conv1 = nn.Conv2d(in_channel, in_channel, kernel_size=3, padding=1, stride=stride, bias=False)
+        self.conv1 = nn.Conv2d(in_channel, in_channel, kernel_size=3, padding=1, stride=stride, bias=not self.bn)
         self.bn1 = nn.BatchNorm2d(in_channel)
         self.relu1 = nn.ReLU()
 
-        self.conv2 = nn.Conv2d(in_channel, out_channel, kernel_size=3, padding=1, stride=1, bias=False)
+        self.conv2 = nn.Conv2d(in_channel, out_channel, kernel_size=3, padding=1, stride=1, bias=not self.bn)
         self.bn2 = nn.BatchNorm2d(out_channel)
         self.relu2 = nn.ReLU()
 
@@ -27,12 +30,16 @@ class BasicBlock(nn.Module):
             identity = x
         
         x = self.conv1(x)
-        x = self.bn1(x)
-        x = self.relu1(x)
+        if self.bn:
+            x = self.bn1(x)
+        if self.relu:
+            x = self.relu1(x)
 
         x = self.conv2(x)
-        x = self.bn2(x)
-        x = self.relu2(x)
+        if self.bn:
+            x = self.bn2(x)
+        if self.relu:
+            x = self.relu2(x)
 
         x += identity
         return x
@@ -89,6 +96,9 @@ class ResNet(nn.Module):
             Block = BasicBlock
         elif layers == 50:
             self.blocks = [3, 4, 6, 3]
+            Block = BottleneckBlock
+        elif layers == 101:
+            self.blocks = [3, 4, 23, 3]
             Block = BottleneckBlock
         else:
             raise ValueError()

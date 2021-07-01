@@ -6,7 +6,7 @@ import numpy as np
 
 class ImageShow:
     idx = 0
-    max_idx = 5
+    max_idx = 6
 
     def __init__(self, env_name="main"):
         try:

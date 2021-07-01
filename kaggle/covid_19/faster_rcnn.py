@@ -28,8 +28,8 @@ class FasterRCNN(nn.Module):
         img_size = x.shape[2:]  # RGB 的通道可以放在channel处, PNG的channel则为1
 
         h = self.extractor(x)
-        rpn_locs, rpn_scores, rois, roi_indices, anchor = self.rpn(
-            h, img_size, scale)
+        rpn_locs, rpn_scores, rois, roi_indices, anchor, rpn_debug_score = self.rpn(
+            h, img_size)
         if isinstance(roi_indices, list):  # since batch size = 1
             roi_indices = roi_indices[0]
         if isinstance(rois, list):

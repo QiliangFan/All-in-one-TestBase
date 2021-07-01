@@ -13,7 +13,7 @@ class ProposalTargetCreator:
         [type]: [description]
     """
 
-    def __init__(self, n_sample=128, pos_ratio=0.5, pos_iou_thresh=0.5, neg_iou_thresh_hi=0.5, neg_iou_thresh_lo=0.0):
+    def __init__(self, n_sample=128, pos_ratio=0.5, pos_iou_thresh=0.7, neg_iou_thresh_hi=0.5, neg_iou_thresh_lo=0.0):
         """[summary]
 
         Args:

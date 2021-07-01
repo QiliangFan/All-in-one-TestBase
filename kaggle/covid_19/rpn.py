@@ -19,12 +19,26 @@ class RPN(nn.Module):
         self.proposal_layer = ProposalCreator(self, **proposal_creator_params)
         n_anchor = self.anchor_base.shape[0]  # 每个像素多少个anchor
         self.conv1 = nn.Sequential(
-            BasicBlock(in_channel, mid_channels),
-            BasicBlock(mid_channels, mid_channels),
-            BasicBlock(mid_channels, mid_channels)
+            nn.Conv2d(in_channel, mid_channels, kernel_size=3, padding=1, stride=1),
+            nn.Dropout(),
+            nn.Conv2d(mid_channels, mid_channels, kernel_size=3, padding=1, stride=1),
         )
-        self.score = BasicBlock(mid_channels, n_anchor * 2)
-        self.loc = BasicBlock(mid_channels, n_anchor * 4)
+        self.score = nn.Sequential(
+            # BasicBlock(mid_channels, mid_channels, relu=False, bn=False),
+            # nn.Dropout(),
+            # BasicBlock(mid_channels, mid_channels, relu=False, bn=False),
+            nn.Conv2d(mid_channels, mid_channels, kernel_size=3, padding=1, stride=1),
+            nn.Conv2d(mid_channels, n_anchor * 2, kernel_size=3, padding=1, stride=1),
+            # BasicBlock(mid_channels, n_anchor * 2, relu=False, bn=False)
+        )
+        self.loc = nn.Sequential(
+            # BasicBlock(mid_channels, mid_channels, relu=True, bn=False),
+            # nn.Dropout(),
+            # BasicBlock(mid_channels, mid_channels, relu=False, bn=False),
+            # BasicBlock(mid_channels, n_anchor * 4, relu=False, bn=False),
+            nn.Conv2d(mid_channels, mid_channels, kernel_size=3, padding=1, stride=1),
+            nn.Conv2d(mid_channels, n_anchor * 4, kernel_size=3, padding=1, stride=1)
+        ) 
 
     def forward(self, x: torch.Tensor, img_size):
         n, _, hh, ww = x.shape
@@ -32,7 +46,8 @@ class RPN(nn.Module):
         anchor = _enumerate_shifted_anchor(self.anchor_base, self.feat_size, hh, ww)
 
         n_anchor = anchor.shape[0] // (hh * ww)  # 每个像素多少个anchor, 是特征图上的, 由于尺寸变小了个数会增多
-        h = F.relu(self.conv1(x), inplace=True)
+        # h = F.relu(self.conv1(x), inplace=True)
+        h = F.leaky_relu(self.conv1(x), inplace=True) 
 
         rpn_locs: torch.Tensor = self.loc(h)
         rpn_scores: torch.Tensor = self.score(h)

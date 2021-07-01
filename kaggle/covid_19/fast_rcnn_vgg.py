@@ -16,7 +16,7 @@ class FasterRCNNVGG(FasterRCNN):
                  n_fg_class=20,
                  ratios=[0.5, 1, 2],
                  anchor_scales=[8, 16, 32]):
-        extractor = ResNet(in_channel=1, layers=50)   # self-defined resnet(only with extractor)
+        extractor = ResNet(in_channel=1, layers=101)   # self-defined resnet(only with extractor)
 
         rpn = RPN(
             extractor.last_channel,
@@ -52,20 +52,19 @@ class VGGROIHead(nn.Module):
         super(VGGROIHead, self).__init__()
 
         self.classifier = nn.Sequential(
-            nn.Linear(in_channel * 7 * 7, 1024),
-            nn.ReLU(True),
-            nn.Dropout(),
-            # nn.Linear(1024, 1024),
+            nn.Linear(in_channel * roi_size * roi_size, in_channel),
             # nn.ReLU(True),
             # nn.Dropout(),
-            nn.Linear(1024, 1024),
-            nn.ReLU(True)
+            nn.Linear(in_channel, in_channel),
+            # nn.ReLU(True)
         )
         self.cls_loc = nn.Sequential(
-            nn.Linear(1024, n_class * 4)
+            nn.Linear(in_channel, in_channel),
+            nn.Linear(in_channel, n_class * 4)
         )
         self.score = nn.Sequential(
-            nn.Linear(1024, n_class),
+            nn.Linear(in_channel, in_channel),
+            nn.Linear(in_channel, n_class),
             # nn.Sigmoid(),
             nn.Softmax(dim=1)
         )
