@@ -135,15 +135,15 @@ class Net(LightningModule):
         losses = losses + [sum(losses)]
 
         # -----------------------------debug for RPN-----------------------------------#
-        with torch.no_grad():
-            debug_score_sort = torch.argsort(rpn_debug_score, descending=True)
-            rpn_debug_score = rpn_debug_score[debug_score_sort][:4]
-            roi = roi[debug_score_sort][:4]
-            image = imgs.data
-            image = self.plot(image, _bbox, color=255)
-            image = self.plot(image, roi, (0, 255, 0), score=rpn_debug_score)
-            # image = self.plot(image, sample_roi[gt_roi_label == 0], (255, 0, 0))
-            self.vis_server.show_image(image)
+        # with torch.no_grad():
+        #     debug_score_sort = torch.argsort(rpn_debug_score, descending=True)
+        #     rpn_debug_score = rpn_debug_score[debug_score_sort][:4]
+        #     roi = roi[debug_score_sort][:4]
+        #     image = imgs.data
+        #     image = self.plot(image, _bbox, color=255)
+        #     image = self.plot(image, roi, (0, 255, 0), score=rpn_debug_score)
+        #     # image = self.plot(image, sample_roi[gt_roi_label == 0], (255, 0, 0))
+        #     self.vis_server.show_image(image)
         # -----------------------------------------------------------------------------#
 
         # ----------------------------debug for ROI--------------------------------------#
