@@ -67,8 +67,8 @@ class FasterRCNN(nn.Module):
             cls_bbox = loc2box(roi.reshape((-1, 4)), roi_cls_loc.reshape((-1, 4)))
             cls_bbox = cls_bbox.contiguous().view(-1, self.n_class*4)
 
-            cls_bbox[:, 0::2] = (cls_bbox[:, 0::2]).clamp(min=0, max=size[0])
-            cls_bbox[:, 1::2] = (cls_bbox[:, 1::2]).clamp(min=0, max=size[1])
+            cls_bbox[:, 0::2] = (cls_bbox[:, 0::2]).clamp(min=0, max=size[0]-1)
+            cls_bbox[:, 1::2] = (cls_bbox[:, 1::2]).clamp(min=0, max=size[1]-1)
 
             prob = F.softmax(roi_score, dim=1)
 

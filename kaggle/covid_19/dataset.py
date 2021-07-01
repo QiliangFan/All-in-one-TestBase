@@ -77,11 +77,13 @@ class ImageData(Dataset):
 
 class ImageLevelData(LightningDataModule):
 
-    def __init__(self, train_data_root: str, img_label_csv: str):
+    def __init__(self, data_root: str, img_label_csv: str):
         super().__init__()
 
-        self.train_data = ImageData(train_data_root, img_label_csv)
-        self.test_data = ImageData(train_data_root)
+        train_root = os.path.join(data_root, "train")
+        test_root = os.path.join(data_root, "test")
+        self.train_data = ImageData(train_root, img_label_csv)
+        self.test_data = ImageData(test_root)
 
     def prepare_data(self):
         pass

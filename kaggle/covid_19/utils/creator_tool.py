@@ -97,8 +97,8 @@ class ProposalCreator:
             n_post_nms = self.n_test_post_nms
 
         roi = loc2box(anchor, loc)
-        roi[:, 0:4:2] = torch.clip(roi[:, 0:4:2], 0, img_size[0])
-        roi[:, 1:4:2] = torch.clip(roi[:, 1:4:2], 0, img_size[1])
+        roi[:, 0:4:2] = torch.clip(roi[:, 0:4:2], 0, img_size[0]-1)
+        roi[:, 1:4:2] = torch.clip(roi[:, 1:4:2], 0, img_size[1]-1)
 
         min_size = self.min_size
         hs = roi[:, 2] - roi[:, 0]

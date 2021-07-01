@@ -11,7 +11,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 from dataset import ImageLevelData
 from net import Net
 
-train_root = "/home/maling/fanqiliang/data/kaggle/siim-covid19-detection/train"
+data_root = "/home/maling/fanqiliang/data/kaggle/siim-covid19-detection"
 image_level = "/home/maling/fanqiliang/data/kaggle/siim-covid19-detection/train_image_level.csv"
 base_path = os.path.dirname(os.path.abspath(__file__))
 
@@ -40,7 +40,8 @@ def train(mid_channel = 512, lr = 1e-3, weight_decay = 1e-9, epochs = 50, report
         resume_from_checkpoint=ckpt_model
     )
     net = Net(mid_channel, lr, weight_decay, reporter)
-    data = ImageLevelData(train_root, image_level)
+    data = ImageLevelData(data_root, image_level)
+
     trainer.fit(net, datamodule=data)
     # trainer.test(net, datamodule=data)
 
