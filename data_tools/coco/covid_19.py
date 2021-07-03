@@ -2,7 +2,7 @@ import SimpleITK as sitk
 import cv2
 import pandas as pd
 import numpy as np
-from typing import List
+from typing import List, Sequence
 import os
 from glob import glob
 from PIL import Image
@@ -90,13 +90,33 @@ def generate_annotation(data_root: str, label_csv: str, img_save_dir: str, save_
         f"{save_path}", "annotation.json"), "w"), indent=4)
 
 
-def main():
-    pass
+def test_worker(idx, dcm, img_save_dir):
+    img: np.ndarray = sitk.GetArrayFromImage(sitk.ReadImage(
+            dcm, imageIO="GDCMImageIO")).astype(np.float32)
+    img = (img - img.min()) / (img.max() - img.min()) * 255
+    img = np.asarray(Image.fromarray(img[0]).convert('RGB'))
+    filename = f"{idx}.jpeg"
+    cv2.imwrite(os.path.join(img_save_dir, filename), img)
+
+def generate_test_img(dcms: Sequence[str], img_save_dir):
+    if not os.path.exists(img_save_dir):
+        os.makedirs(img_save_dir, exist_ok=True)
+    
+    from multiprocessing import Pool 
+
+    pool_params = [(i, dcm, img_save_dir) for i, dcm in enumerate(dcms)]
+    with Pool(64) as pool:
+        pool.starmap(test_worker, pool_params)
 
 
 if __name__ == "__main__":
-    data_root = "/home/maling/fanqiliang/data/kaggle/siim-covid19-detection/train"
+    test_data_root = "/home/maling/fanqiliang/data/kaggle/siim-covid19-detection/test"
+    train_data_root = "/home/maling/fanqiliang/data/kaggle/siim-covid19-detection/train"
     label_csv = "/home/maling/fanqiliang/data/kaggle/siim-covid19-detection/train_image_level.csv"
 
-    generate_annotation(data_root, label_csv, img_save_dir="/home/maling/fanqiliang/data/coco_covid19/imgs",
-                        save_path="/home/maling/fanqiliang/data/coco_covid19")
+    # generate_annotation(train_data_root, label_csv, img_save_dir="/home/maling/fanqiliang/data/coco_covid19/imgs",
+    #                     save_path="/home/maling/fanqiliang/data/coco_covid19")
+
+    from glob import glob
+    imgs = glob(os.path.join(test_data_root, "**", "*.dcm"), recursive=True)
+    generate_test_img(imgs, "/home/maling/fanqiliang/data/coco_covid19/test_imgs")

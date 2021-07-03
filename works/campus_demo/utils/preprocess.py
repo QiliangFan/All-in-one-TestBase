@@ -27,20 +27,22 @@ def normalize(ct: Union[np.ndarray, str]) -> np.ndarray:
     return ct
 
 
-def parenchyma_seg(ct: np.ndarray, vis: Visdom) -> np.ndarray:
+def parenchyma_seg(ct: np.ndarray, vis: Visdom = None) -> np.ndarray:
     arr = ct.copy()
 
     # binarize
     threshold = -400
     arr = arr < threshold
-    vis.image(arr.astype(np.float32), "1binarize")
-    time.sleep(1)
+    if vis is not None:
+        vis.image(arr.astype(np.float32), "1binarize")
+        time.sleep(1)
 
     # clear border
     cleared: np.ndarray = clear_border(arr)
 
-    vis.image(cleared.astype(np.float32), "2cleared")
-    time.sleep(1)
+    if vis is not None:
+        vis.image(cleared.astype(np.float32), "2cleared")
+        time.sleep(1)
 
     # divide into two areas (excluded with background)
     label_img = label(cleared)
@@ -53,20 +55,26 @@ def parenchyma_seg(ct: np.ndarray, vis: Visdom) -> np.ndarray:
                 for x, y in region.coords:
                     label_img[x, y] = 0
     arr = label_img > 0
-    vis.image(arr.astype(np.float32), "3two area")
-    time.sleep(1)
+
+    if vis is not None:
+        vis.image(arr.astype(np.float32), "3two area")
+        time.sleep(1)
 
     # fill holes
     arr = binary_erosion(arr, disk(2))
     arr = binary_closing(arr, disk(10))
     edges = roberts(arr)
     arr = ndimage.binary_fill_holes(edges)
-    vis.image(arr.astype(np.float32), "4fill holes")
-    time.sleep(1)
+    
+    if vis is not None:
+        vis.image(arr.astype(np.float32), "4fill holes")
+        time.sleep(1)
 
     res: np.ndarray = arr * ct
-    vis.image((res.astype(np.float32) - res.min()) / (res.max() - res.min()) * 255, "seg result")
-    time.sleep(1)
+
+    if vis is not None:
+        vis.image((res.astype(np.float32) - res.min()) / (res.max() - res.min()) * 255, "seg result")
+        time.sleep(1)
 
     return res
 
