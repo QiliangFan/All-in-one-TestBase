@@ -18,6 +18,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-
-      - run: |
-          echo ${{ github.event.issue_comment.body }}
+        
+      - name: test
+        env: 
+          comment: ${{ github.event.issue_comment.body }}
+        run: |
+          echo $comment
