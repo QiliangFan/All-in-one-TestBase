@@ -9,21 +9,15 @@ on:
     branches:
       - main
       - master
+  
+  issue_comment:
+    types: [created]
 
 jobs:
-  generate_snapshot:
-    name: generate snapshot
+  test:
     runs-on: ubuntu-latest
 
     steps:
-      - name: checkout 
-        uses: actions/checkout@v2
-        with:
-          repo-token: "${{ secrets.GITHUB_TOKEN }}"
-          tag: "snapshot"
 
-      - name: test
-        env: 
-          test: hhahahahhahahah
-        run: |
-          sh .github/scripts/test.sh
+      - run: |
+        echo ${{ github.event.issue_comment.body }}
