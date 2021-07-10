@@ -20,4 +20,4 @@ jobs:
     steps:
 
       - run: |
-        echo ${{ github.event.issue_comment.body }}
+          echo ${{ github.event.issue_comment.body }}
