@@ -21,3 +21,9 @@ jobs:
         with:
           repo-token: "${{ secrets.GITHUB_TOKEN }}"
           tag: "snapshot"
+
+      - name: test
+        env: 
+          test: hhahahahhahahah
+        run: |
+          sh .github/scripts/test.sh
