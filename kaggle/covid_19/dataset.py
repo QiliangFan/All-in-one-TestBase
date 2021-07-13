@@ -100,7 +100,7 @@ class ImageLevelData(LightningDataModule):
         print(f"Stage: {stage}")
 
     def train_dataloader(self):
-        return DataLoader(self.train_data, batch_size=1, shuffle=True, num_workers=8, pin_memory=True, prefetch_factor=4)
+        return DataLoader(self.train_data, batch_size=1, shuffle=True, num_workers=8, pin_memory=True, prefetch_factor=8)
 
     def test_dataloader(self):
-        return DataLoader(self.test_data, batch_size=1, num_workers=8, pin_memory=True, prefetch_factor=4)
+        return DataLoader(self.test_data, batch_size=1, num_workers=8, pin_memory=True, prefetch_factor=8)

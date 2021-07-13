@@ -48,7 +48,7 @@ class Net(LightningModule):
 
         # 利用gt-bbox将anchor 转为 gt-loc, gt-label
         self.anchor_target_creator = AnchorTargetCreator(pos_iou_thresh=0.7)
-        self.proposal_target_creator = ProposalTargetCreator(pos_ratio=0.9)
+        self.proposal_target_creator = ProposalTargetCreator()
 
         self.loc_normalize_mean = faster_rcnn.loc_normalize_mean
         self.loc_normalize_std = faster_rcnn.loc_normalize_std
@@ -85,7 +85,7 @@ class Net(LightningModule):
         with torch.no_grad():
             # bbox 注意缩放
             _bbox = bbox / scale
-            sample_roi, gt_roi_loc, gt_roi_label = self.proposal_target_creator(
+            sample_roi, gt_roi_loc, gt_roi_label, sample_roi_keepidx = self.proposal_target_creator(
                 roi, _bbox, label, self.loc_normalize_mean, self.loc_normalize_std)
 
         # since batch size = 1, there is only one image
@@ -144,16 +144,17 @@ class Net(LightningModule):
         with torch.no_grad():
             debug_dpn_nums = 6
             roi = roi[torch.where(rpn_debug_score > 0.5)[0]]
-            rpn_debug_score = rpn_debug_score[rpn_debug_score > 0.5]
-            debug_score_sort = torch.argsort(rpn_debug_score, descending=True)
-            rpn_debug_score = rpn_debug_score[debug_score_sort][:debug_dpn_nums]
+            _rpn_debug_score = rpn_debug_score[rpn_debug_score > 0.5]
+            debug_score_sort = torch.argsort(_rpn_debug_score, descending=True)
+            _rpn_debug_score = _rpn_debug_score[debug_score_sort][:debug_dpn_nums]
             roi = roi[debug_score_sort][:debug_dpn_nums]
             image = imgs.data
             image = self.plot(image, _bbox, color=255)
-            image = self.plot(image, roi, (0, 255, 0), score=rpn_debug_score)
+            image = self.plot(image, roi, (0, 255, 0), score=_rpn_debug_score)
 
             _sample_roi = sample_roi[torch.where(gt_roi_label > 0)[0]]
-            image = self.plot(image, _sample_roi[:6], (255, 215, 0))
+            _score = rpn_debug_score[sample_roi_keepidx][torch.where(gt_roi_label > 0)[0]]
+            image = self.plot(image, _sample_roi[:6], (255, 215, 0), score=_score[:6])
             self.vis_server.show_image(image)
         # -----------------------------------------------------------------------------#
 
@@ -220,14 +221,16 @@ class Net(LightningModule):
 
     def configure_optimizers(self):
         warm_up_step = 500
-        opt =  optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
-        lr_sche = lr_scheduler.LambdaLR(opt, lambda step: self.lr if step > warm_up_step else self.lr / 1200 + self.lr / warm_up_step * step)
+        opt = optim.Adadelta(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+        # opt = optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+        # lr_sche = lr_scheduler.LambdaLR(opt, lambda step: self.lr if step > warm_up_step else self.lr / 1200 + self.lr / warm_up_step * step)
+        lr_sche = lr_scheduler.StepLR(opt, step_size=5, gamma=0.5)
         return {
             "optimizer": opt,
-            # "lr_scheduler": {
-            #     "scheduler": lr_sche,
-            #     "interval": "step"
-            # }
+            "lr_scheduler": {
+                "scheduler": lr_sche,
+                "interval": "epoch"
+            }
         }
 
     @staticmethod

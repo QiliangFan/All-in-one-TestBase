@@ -14,7 +14,7 @@ class FasterRCNNVGG(FasterRCNN):
                  n_fg_class=20,
                  ratios=[0.5, 1, 2],
                  anchor_scales=[8, 16, 32]):
-        extractor = ResNet(in_channel=1, layers=34)   # self-defined resnet(only with extractor)
+        extractor = ResNet(in_channel=1, layers=18)   # self-defined resnet(only with extractor)
 
         rpn = RPN(
             extractor.last_channel,
@@ -23,7 +23,7 @@ class FasterRCNNVGG(FasterRCNN):
             anchor_scales=anchor_scales,
             feat_size=self.feat_stride,
             proposal_creator_params={
-                "min_size": 8,
+                "min_size": 2,
                 "n_train_post_nms": 4000,
             }
         )

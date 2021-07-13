@@ -1,5 +1,11 @@
 import os
 from glob import glob
+import random
+import torch
+random.seed(1)
+torch.manual_seed(1)
+if torch.cuda.is_available():
+    torch.cuda.manual_seed_all(1)
 
 import autogluon.core as ag
 import autogluon
@@ -18,7 +24,7 @@ base_path = os.path.dirname(os.path.abspath(__file__))
 @ag.args(
     mid_channel = ag.space.Categorical(128, 256, 512, 1024),
     lr = ag.space.Real(1e-6, 0.1, log=True),
-    weight_decay = ag.space.Real(1e-12, 1e-4, log=True),
+    weight_decay = ag.space.Real(1e-12, 1e-3, log=True),
     epochs=10,
 )
 def search(args, reporter: LocalStatusReporter):
@@ -37,7 +43,9 @@ def train(mid_channel = 512, lr = 1e-3, weight_decay = 1e-9, epochs = 50, report
         max_epochs=epochs, 
         fast_dev_run=False, 
         callbacks=[ckpt], 
-        resume_from_checkpoint=ckpt_model
+        resume_from_checkpoint=ckpt_model,
+        gradient_clip_val=1e6,
+        deterministic=True
     )
     net = Net(mid_channel, lr, weight_decay, reporter)
     data = ImageLevelData(data_root, image_level)
@@ -46,7 +54,7 @@ def train(mid_channel = 512, lr = 1e-3, weight_decay = 1e-9, epochs = 50, report
     # trainer.test(net, datamodule=data)
 
 if __name__ == "__main__":
-    train()
+    train(epochs=500, lr=0.0005, weight_decay=1e-9, mid_channel=128)
     # with autogluon.utils.warning_filter():
     #     scheduler = sc.FIFOScheduler(search,
     #         num_trials = 50,

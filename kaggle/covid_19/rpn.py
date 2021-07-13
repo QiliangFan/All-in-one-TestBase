@@ -1,4 +1,7 @@
+from torch.nn.modules.activation import Sigmoid, Tanh
 from torch.nn.modules.batchnorm import BatchNorm2d
+from torch.nn.modules.dropout import Dropout
+from torch.nn.modules.instancenorm import InstanceNorm2d
 from utils.creator_tool import ProposalCreator
 from torch.nn import functional as F
 import torch
@@ -19,29 +22,39 @@ class RPN(nn.Module):
         self.proposal_layer = ProposalCreator(self, **proposal_creator_params)
         n_anchor = self.anchor_base.shape[0]  # 每个像素多少个anchor
         self.conv1 = nn.Sequential(
-            # nn.Conv2d(in_channel, mid_channels, kernel_size=3, padding=1, stride=1),
-            BasicBlock(in_channel, mid_channels, bn=False, relu=False),
-            # nn.Dropout(),
-            # nn.Conv2d(mid_channels, mid_channels, kernel_size=3, padding=1, stride=1),
+            # BasicBlock(in_channel, mid_channels, bn=False, relu=False),
+            nn.Conv2d(in_channel, mid_channels, kernel_size=3, stride=1, padding=1),
+            # *[nn.Sequential(
+            #     BasicBlock(mid_channels, mid_channels, bn=False, relu=True),
+            # ) for i in range(4)],
+
             *[nn.Sequential(
-                nn.Conv2d(mid_channels, mid_channels, kernel_size=3, padding=1, stride=1),
-                # nn.Dropout()
+                nn.Conv2d(mid_channels, mid_channels, kernel_size=3, stride=1, padding=1),
+                nn.InstanceNorm2d(mid_channels),
+                nn.Tanh()
             ) for i in range(2)],
         )
         self.score = nn.Sequential(
-            # BasicBlock(mid_channels, mid_channels, relu=False, bn=False),
-            # nn.Dropout(),
-            BasicBlock(mid_channels, n_anchor * 2, relu=False, bn=False),
-            # nn.Conv2d(mid_channels, n_anchor * 2, kernel_size=3, padding=1, stride=1),
-            nn.Softmax(dim=1)
-            # BasicBlock(mid_channels, n_anchor * 2, relu=False, bn=False)
+            BasicBlock(mid_channels, mid_channels, bn=True, relu=True),
+            *[nn.Sequential(
+                BasicBlock(mid_channels, mid_channels, bn=True, relu=True),
+            ) for i in range(5)],
+            nn.Conv2d(mid_channels, n_anchor * 2, kernel_size=3, stride=1, padding=1),
+            nn.Sigmoid(),
         )
         self.loc = nn.Sequential(
-            # BasicBlock(mid_channels, mid_channels, relu=True, bn=False),
-            # nn.Dropout(),
-            # BasicBlock(mid_channels, mid_channels, relu=False, bn=False),
-            BasicBlock(mid_channels, n_anchor * 4, relu=False, bn=False),
-            # nn.Conv2d(mid_channels, n_anchor * 4, kernel_size=3, padding=1, stride=1)
+            # BasicBlock(in_channel, mid_channels, bn=False, relu=False),
+            *[nn.Sequential(
+                BasicBlock(mid_channels, mid_channels, bn=True, relu=True),
+            ) for i in range(5)],
+            # BasicBlock(mid_channels, n_anchor * 4, bn=False, relu=False),
+            # nn.Conv2d(mid_channels, mid_channels, kernel_size=3, stride=1, padding=1),
+            # *[nn.Sequential(
+            #     nn.Conv2d(mid_channels, mid_channels, kernel_size=3, stride=1, padding=1),
+            #     nn.InstanceNorm2d(mid_channels),
+            #     # nn.ReLU()
+            # ) for i in range(10)],
+            nn.Conv2d(mid_channels, n_anchor * 4, kernel_size=3, stride=1, padding=1),
         )
 
     def forward(self, x: torch.Tensor, img_size):
@@ -52,8 +65,10 @@ class RPN(nn.Module):
 
         # 每个像素多少个anchor, 是特征图上的, 由于尺寸变小了个数会增多
         n_anchor = anchor.shape[0] // (hh * ww)
+        h = self.conv1(x)
         # h = F.relu(self.conv1(x), inplace=True)
-        h = F.leaky_relu(self.conv1(x), inplace=True)
+        # h = F.leaky_relu(self.conv1(x), inplace=True)
+        # h = F.leaky_relu(x)
 
         rpn_locs: torch.Tensor = self.loc(h)
         rpn_scores: torch.Tensor = self.score(h)

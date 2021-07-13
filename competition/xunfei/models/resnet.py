@@ -109,7 +109,7 @@ class ResNet(nn.Module):
         assert len(self.blocks) > 0
         
         ch = 64
-        self.layer1 = nn.Conv2d(in_channel, ch, kernel_size=7, padding=3, stride=2)
+        self.layer1 = nn.Conv2d(in_channel, ch, kernel_size=3, padding=1, stride=1)
 
         layer2 = OrderedDict()
         layer2["layer2_pool"] = nn.MaxPool2d(kernel_size=3, stride=2)

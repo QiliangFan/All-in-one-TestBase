@@ -66,7 +66,7 @@ class ProposalTargetCreator:
         gt_roi_loc = (gt_roi_loc - torch.as_tensor(loc_normalize_mean, dtype=torch.float32, device=gt_roi_loc.device)
                       ) / torch.as_tensor(loc_normalize_std, dtype=torch.float32, device=gt_roi_loc.device)
 
-        return sample_roi, gt_roi_loc, gt_roi_label
+        return sample_roi, gt_roi_loc, gt_roi_label, keep_index
 
 
 class ProposalCreator:
