@@ -29,7 +29,7 @@ class Data(Dataset):
                     bboxs.append([y_min, x_min, height, width, cls])
         arr: np.ndarray = cv2.imread(img_path)
         arr = arr.transpose([2, 0, 1]) # (C, H, W)
-        arr: torch.Tensor = torch.as_tensor(arr, dtype=torch.float32).flip(dims=(1,))  # (RGB)
+        arr: torch.Tensor = torch.as_tensor(arr, dtype=torch.float32).flip(dims=(0,))  # (RGB)
         bboxs = torch.as_tensor(bboxs)
         return arr, bboxs
 

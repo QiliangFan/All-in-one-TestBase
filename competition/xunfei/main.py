@@ -21,6 +21,7 @@ if __name__ == "__main__":
         max_epochs=5
     )
 
-    net = Net(num_classes=len(labels)+1, labels=labels)
+    net = Net(num_classes=len(labels)+1, labels=labels, anchor_ratios=[0.0625, 0.125, 0.25, 0.3, 0.5, 1, 2, 3, 4, 8, 16], anchor_size=[1, 2, 3, 4, 8, 16, 32, 64, 128])
+    # net = Net(num_classes=len(labels)+1, labels=labels, anchor_ratios=[0.25, 0.5, 1, 2, 4], anchor_size=[0.5, 2, 4, 8, 16])
 
     trainer.fit(net, datamodule=datamodule)
