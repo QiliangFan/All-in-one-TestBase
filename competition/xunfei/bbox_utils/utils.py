@@ -10,25 +10,25 @@ def loc2box(anchor: torch.Tensor, loc: torch.Tensor):
     """
     roi = torch.zeros_like(anchor, device=loc.device)
 
-    ctr_anchor_y = anchor[:, :, :, 0] + 0.5 * anchor[:, :, :, 2]
-    ctr_anchor_x = anchor[:, :, :, 1] + 0.5 * anchor[:, :, :, 3]
-    anchor_height = anchor[:, :, :, 2]
-    anchor_width = anchor[:, :, :, 3]
+    ctr_anchor_y = anchor[..., 0] + 0.5 * anchor[..., 2]
+    ctr_anchor_x = anchor[..., 1] + 0.5 * anchor[..., 3]
+    anchor_height = anchor[..., 2]
+    anchor_width = anchor[..., 3]
 
-    loc_y = loc[:, :, :, 0]
-    loc_x = loc[:, :, :, 1]
-    loc_height = loc[:, :, :, 2]
-    loc_width = loc[:, :, :,3]
+    loc_y = loc[..., 0]
+    loc_x = loc[..., 1]
+    loc_height = loc[..., 2]
+    loc_width = loc[...,3]
 
     ctr_roi_y = ctr_anchor_y + loc_y * anchor_height
     ctr_roi_x = ctr_anchor_x + loc_x * anchor_width
     roi_height = anchor_height * torch.exp(loc_height)
     roi_width = anchor_width * torch.exp(loc_width)
 
-    roi[:, :, :, 0] = ctr_roi_y - 0.5 * roi_height
-    roi[:, :, :, 1] = ctr_roi_x - 0.5 * roi_width
-    roi[:, :, :, 2] = roi_height
-    roi[:, :, :, 3] = roi_width
+    roi[..., 0] = ctr_roi_y - 0.5 * roi_height
+    roi[..., 1] = ctr_roi_x - 0.5 * roi_width
+    roi[..., 2] = roi_height
+    roi[..., 3] = roi_width
 
     return roi
 

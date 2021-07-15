@@ -23,7 +23,7 @@ class RPN(nn.Module):
                 nn.Conv2d(in_channel, in_channel, kernel_size=3, stride=1, padding=1),
                 nn.InstanceNorm2d(in_channel),
                 nn.ReLU()
-            ) for i in range(10)],
+            ) for i in range(1)],
             nn.Conv2d(in_channel, n_anchor * num_classes, kernel_size=3, stride=1, padding=1)
         )
 
@@ -33,7 +33,7 @@ class RPN(nn.Module):
                 nn.Conv2d(in_channel, in_channel, kernel_size=3, stride=1, padding=1),
                 nn.InstanceNorm2d(in_channel),
                 nn.ReLU()
-            ) for i in range(10)],
+            ) for i in range(1)],
             nn.Conv2d(in_channel, n_anchor * 4, kernel_size=3, stride=1, padding=1)
         )
 

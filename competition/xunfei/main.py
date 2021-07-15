@@ -1,7 +1,9 @@
 import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 from pytorch_lightning import Trainer
 from dataset import DataModule
 from models.net import Net
+import torch
 
 stage1_data_root = "/home/maling/fanqiliang/data/xunfei_image_recognition/stage_1"
 labels = ["knife", "scissors", "sharpTools", "expandableBaton", "smallGlassBottle", "electricBaton",
@@ -17,7 +19,7 @@ if __name__ == "__main__":
         stage1_data_root, "train"), os.path.join(stage1_data_root, "test"))
 
     trainer = Trainer(
-        gpus=1, 
+        gpus=1 if torch.cuda.device_count() > 0 else 0, 
         max_epochs=5
     )
 
