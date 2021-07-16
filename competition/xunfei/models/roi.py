@@ -3,7 +3,7 @@ from torch import nn
 from torch.nn.modules.dropout import Dropout
 from bbox_utils.utils import bbox_iou, box2loc, loc2box
 from torchvision.ops import nms
-from typing import Tuple
+from typing import Tuple, cast
 
 class ROIHead(nn.Module):
 
@@ -31,7 +31,7 @@ class ROIHead(nn.Module):
             nn.Softmax(dim=1)
         )
 
-    def forward(self, rpn_out: torch.Tensor, rois: torch.Tensor, gt_anchor_label: torch.Tensor, gt_bbox: torch.Tensor, gt_label: torch.Tensor, img_size: Tuple[int, int]):
+    def forward(self, rpn_out: torch.Tensor, rois: torch.Tensor, img_size: Tuple[int, int], gt_anchor_label: torch.Tensor, gt_bbox: torch.Tensor = None, gt_label: torch.Tensor = None):
         """
         rpn_out: The output of RPN, (N_rois, last_chann * ROI_SIZE * ROI_SIZE)
         rois: (x1, y1, x2, y2)  == (N, 4)
@@ -49,31 +49,42 @@ class ROIHead(nn.Module):
         pred_box = loc2box(rois, loc)  # # (N, num_class, 4)
         pred_box_score = cls.max(dim=1)[0]
 
-        # assign ground truth
-        iou = bbox_iou(pred_box, gt_bbox)
-        bbox_idx = iou.argmax(dim=1)
-        iou_maximum = iou[range(iou.shape[0]), bbox_idx]
-        bg_idx = torch.where(iou_maximum < 0.4)[0]
-        gt_roi_bbox = gt_bbox[bbox_idx]
-        gt_roi_label = gt_label[bbox_idx]
-        gt_roi_label[bg_idx] = 0
-
-        gt_roi_loc = box2loc(rois, gt_roi_bbox)
-
         # input : (x1, y1, x2, y2)
-        keep_idx = nms(
-            torch.stack([pred_box[:, 1], pred_box[:, 0], pred_box[:, 1] + pred_box[:, 3], pred_box[:, 0] + pred_box[:, 2]], dim=1)
-            , iou_maximum, iou_threshold=0.5)
+        if self.training:
+            gt_bbox = cast(torch.Tensor, gt_bbox)
+            gt_label = cast(torch.Tensor, gt_label)
+            # assign ground truth
+            iou = bbox_iou(pred_box, gt_bbox)
+            bbox_idx = iou.argmax(dim=1)
+            iou_maximum = iou[range(iou.shape[0]), bbox_idx]
+            bg_idx = torch.where(iou_maximum < 0.4)[0]
+            gt_roi_bbox = gt_bbox[bbox_idx]
+            gt_roi_label = gt_label[bbox_idx]
+            gt_roi_label[bg_idx] = 0
+            gt_roi_loc = box2loc(rois, gt_roi_bbox)
+            keep_idx = nms(
+                torch.stack([pred_box[:, 1], pred_box[:, 0], pred_box[:, 1] + pred_box[:, 3], pred_box[:, 0] + pred_box[:, 2]], dim=1)
+                , iou_maximum, iou_threshold=0.5
+            )
+        else:
+            keep_idx = nms(
+                torch.stack([pred_box[:, 1], pred_box[:, 0], pred_box[:, 1] + pred_box[:, 3], pred_box[:, 0] + pred_box[:, 2]], dim=1)
+                , cls.max(dim=1)[0], iou_threshold=0.5
+            )
 
         pred_box = pred_box[keep_idx]
         pred_box_score = pred_box_score[keep_idx]
         rois = rois[keep_idx]
         loc = loc[keep_idx]
         cls = cls[keep_idx]
-        gt_roi_label = gt_roi_label[keep_idx]
-        gt_roi_loc = gt_roi_loc[keep_idx]
+        if self.training:
+            gt_roi_label = gt_roi_label[keep_idx]
+            gt_roi_loc = gt_roi_loc[keep_idx]
 
-        return loc, cls, gt_roi_loc, gt_roi_label, pred_box, pred_box_score
+            return loc, cls, pred_box, pred_box_score, gt_roi_loc, gt_roi_label
+
+        else:
+            return loc, cls, pred_box, pred_box_score, None, None
 
     def get_inside_index(self, bbox: torch.Tensor, h: int, w: int):
         inside_index = torch.where(

@@ -20,7 +20,7 @@ class Net(LightningModule):
                  labels: Sequence[str],
                  anchor_ratios=[0.5, 1, 2],
                  anchor_size=[4, 8, 16],
-                 min_size=4):
+                 ):
         """
         num_classes: fg_class + 1 (bg_class: 0)
         """
@@ -31,7 +31,6 @@ class Net(LightningModule):
         self.labels = labels
         self.anchor_ratios = anchor_ratios
         self.anchor_size = anchor_size
-        self.min_size = min_size
 
         # anchor prepare works
         self.n_anchor = len(self.anchor_ratios) * len(self.anchor_size)
@@ -61,20 +60,27 @@ class Net(LightningModule):
         self.roi_cls_loss = nn.CrossEntropyLoss()
         self.roi_loc_loss = nn.SmoothL1Loss()
 
-    def forward(self, img: torch.Tensor, gt: torch.Tensor, img_size: Tuple[int, int]):
+    def forward(self, img: torch.Tensor, img_size: Tuple[int, int], gt: torch.Tensor = None):
         n_batch = img.shape[0]
         assert n_batch == 1
 
-        # Ground Truth (only support batch size = 1)
-        gt_bbox = gt[0, :, :4]
-        gt_label = gt[0, :, 4]
+        if self.training:
+            gt = cast(torch.Tensor, gt)
+            # Ground Truth (only support batch size = 1)
+            gt_bbox = gt[0, :, :4]
+            gt_label = gt[0, :, 4]
 
-        _gt_bbox = torch.stack([
-            gt_bbox[:, 1],
-            gt_bbox[:, 0],
-            gt_bbox[:, 1] + gt_bbox[:, 3],
-            gt_bbox[:, 0] + gt_bbox[:, 2]
-        ], dim=1)
+            _gt_bbox = torch.stack([
+                gt_bbox[:, 1],
+                gt_bbox[:, 0],
+                gt_bbox[:, 1] + gt_bbox[:, 3],
+                gt_bbox[:, 0] + gt_bbox[:, 2]
+            ], dim=1)
+        else:
+            gt_bbox = None
+            gt_label = None
+
+            _gt_bbox = None
 
         features: torch.Tensor = self.feature(img)
 
@@ -83,58 +89,62 @@ class Net(LightningModule):
 
         # roi: (x1, y1, x2, y2)
         out, cls_softmax, loc, roi, roi_score, roi_label, gt_anchor_loc, gt_anchor_label = self.rpn(
-            features, anchors, gt_bbox, gt_label, self.feat_stride, img_size)
+            features, anchors, self.feat_stride, img_size, gt_bbox, gt_label)
         if out is None or roi.shape[0] == 0:
             return None
 
-        roi_loc, roi_cls, gt_roi_loc, gt_roi_label, pred_box, pred_box_score = self.roi_head(
-            out, roi, gt_anchor_label, gt_bbox, gt_label, img_size)
+        roi_loc, roi_cls, pred_box, pred_box_score, gt_roi_loc, gt_roi_label = self.roi_head(
+            out, roi, img_size, gt_anchor_label if self.training else roi_label, gt_bbox, gt_label)
 
         # ------------------------------- RPN (anchor) ---------------------------------------------------
         # assign labels corresponding to rois...
         # compute loss: anchor -> roi
-        anchor_loc_loss = torch.nan_to_num(self.anchor_loc_loss(
-            loc[gt_anchor_label > 0], gt_anchor_loc[gt_anchor_label > 0]), posinf=10)
-        anchor_cls_loss = self.anchor_cls_loss(
-            cls_softmax, gt_anchor_label.long())
-
         # DEBUG
-        self.show_image(img, _gt_bbox, win="gt")
-        self.show_image(img, roi, labels=gt_anchor_label, win="roi")
+        if _gt_bbox is not None:
+            self.show_image(img, _gt_bbox, win=f"{'training' if self.training else 'test'}gt")
+        self.show_image(img, roi, labels=gt_anchor_label, win=f"{'training' if self.training else 'test'}roi")
 
         # ---------------------------------------------------------------------------------------------
 
         # ------------------------------- roi ---------------------------------------------------
         # compute loss: roi -> gt_bbox (可见roi是多么重要)
-        roi_loc_loss = torch.nan_to_num(self.roi_loc_loss(
-            roi_loc[gt_roi_label > 0], gt_roi_loc[gt_roi_label > 0]), posinf=10)
-        roi_cls_loss = self.roi_cls_loss(roi_cls, gt_roi_label.long())
-
         # DEBUG
         _pred_box = torch.stack([pred_box[:, 1], pred_box[:, 0], pred_box[:, 3] +
                                  pred_box[:, 1], pred_box[:, 2]+pred_box[:, 0]], dim=1)
         _pred_box = _pred_box[:8]
-        self.show_image(img, _pred_box, win="pred_bbox")
+        self.show_image(img, _pred_box, win=f"{'training' if self.training else 'test'}pred_bbox")
         # ----------------------------------------------------------------------------------------
-        self.log_dict({
-            "anchor_loc_loss": anchor_loc_loss,
-            "anchor_cls_loss": anchor_cls_loss,
-            "roi_loc_loss": roi_loc_loss,
-            "roi_cls_loss": roi_cls_loss
-        }, prog_bar=True)
-        return anchor_loc_loss + anchor_cls_loss + roi_loc_loss + roi_cls_loss
+
+        if self.training:
+            anchor_loc_loss = torch.nan_to_num(self.anchor_loc_loss(
+                loc[gt_anchor_label > 0], gt_anchor_loc[gt_anchor_label > 0]), posinf=10)
+            anchor_cls_loss = self.anchor_cls_loss(
+                cls_softmax, gt_anchor_label.long())
+            roi_loc_loss = torch.nan_to_num(self.roi_loc_loss(
+                roi_loc[gt_roi_label > 0], gt_roi_loc[gt_roi_label > 0]), posinf=10)
+            roi_cls_loss = self.roi_cls_loss(roi_cls, gt_roi_label.long())
+            self.log_dict({
+                "anchor_loc_loss": anchor_loc_loss,
+                "anchor_cls_loss": anchor_cls_loss,
+                "roi_loc_loss": roi_loc_loss,
+                "roi_cls_loss": roi_cls_loss
+            }, prog_bar=True)
+            return anchor_loc_loss + anchor_cls_loss + roi_loc_loss + roi_cls_loss
+        else:
+
+            return pred_box, pred_box_score
 
     def configure_optimizers(self):
         return torch.optim.Adam(self.parameters(), lr=1e-4, weight_decay=1e-8)
 
     def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int):
         arr, bboxs = batch
-        loss = self(arr, bboxs, img_size=arr.shape[2:])
+        loss = self(arr, img_size=arr.shape[2:], gt=bboxs)
         return loss
 
     def test_step(self, batch, batch_idx: int):
         arr, bboxs = batch
-        self(arr, bboxs, img_size=arr.shape[2:])
+        self(arr, img_size=arr.shape[2:], gt=bboxs)
 
     def generate_anchors(self, feat_size: Tuple[int, int]):
         H, W = feat_size
@@ -160,7 +170,7 @@ class Net(LightningModule):
         self.vis = Visdom(env="xunfei")
 
     @torch.no_grad()
-    def show_image(self, img, box, win="default", labels=None):
+    def show_image(self, img, box, win: str="default", labels=None):
         """
         box: (x1, y1, x2, y2) 
         """
@@ -179,7 +189,7 @@ class Net(LightningModule):
 
         arr = img.copy()
         for x1, y1, x2, y2 in box[fg_idx]:
-            if win == "pred_bbox":
+            if win.endswith("pred_bbox"):
                 color = (0, 0, 255)
             else:
                 color = (255, 255, 0)
@@ -194,5 +204,5 @@ class Net(LightningModule):
         arr = torch.flip(arr, dims=[0])
         self.vis.image(
             arr, win=f"{win}{self.idx % 2}")
-        if win == "pred_bbox":
+        if win.endswith("pred_bbox"):
             self.idx += 1

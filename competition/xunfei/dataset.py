@@ -60,5 +60,5 @@ class DataModule(LightningDataModule):
         return train_data
 
     def test_dataloader(self) -> DataLoader:
-        test_data = DataLoader(self.test_data, batch_size=1, shuffle=True, num_workers=8, pin_memory=True, prefetch_factor=8)
+        test_data = DataLoader(self.test_data, batch_size=1, num_workers=8, pin_memory=True, prefetch_factor=8)
         return test_data

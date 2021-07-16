@@ -41,10 +41,10 @@ class RPN(nn.Module):
             self, 
             features: torch.Tensor, 
             anchors: torch.Tensor,
-            gt_bbox: torch.Tensor,
-            gt_label: torch.Tensor,
             feat_stride: int,
-            img_size: Tuple[int, int]) -> Tuple[torch.Tensor, ...]:
+            img_size: Tuple[int, int],
+            gt_bbox: torch.Tensor = None,
+            gt_label: torch.Tensor = None,) -> Tuple[torch.Tensor, ...]:
         n_batch = features.shape[0]
         assert n_batch == 1
         H, W = features.shape[2:4]
@@ -57,7 +57,7 @@ class RPN(nn.Module):
         cls_softmax = torch.softmax(cls, dim=-1).to(device=cls.device)
         loc = loc.permute(dims=[0, 2, 3, 1]).view(n_batch, H, W, self.n_anchor, 4)
 
-        cls_softmax, loc, roi, roi_score, roi_label, gt_anchor_loc, gt_anchor_label = self.proposal_creator(cls_softmax, loc, anchors, gt_bbox, gt_label, img_size)
+        cls_softmax, loc, roi, roi_score, roi_label, gt_anchor_loc, gt_anchor_label = self.proposal_creator(cls_softmax, loc, anchors, img_size, gt_bbox, gt_label)
         if roi.shape[0] == 0:
             return None, None, None, None, None, None, None, None
         _roi = torch.cat([torch.zeros((roi.shape[0], 1), device=features.device), roi], dim=1)
