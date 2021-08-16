@@ -131,7 +131,8 @@ class Net(LightningModule):
             }, prog_bar=True)
             return anchor_loc_loss + anchor_cls_loss + roi_loc_loss + roi_cls_loss
         else:
-
+            pred_box = pred_box[torch.where(pred_box_score > 0.5)[0]]
+            pred_box_score = pred_box_score[torch.where(pred_box_score > 0.5)[0]]
             return pred_box, pred_box_score
 
     def configure_optimizers(self):

@@ -84,6 +84,10 @@ class ROIHead(nn.Module):
             return loc, cls, pred_box, pred_box_score, gt_roi_loc, gt_roi_label
 
         else:
+            inside_index = self.get_inside_index(pred_box, H, W)
+            pred_box = pred_box[inside_index]
+            pred_box_score = pred_box_score[inside_index]
+
             return loc, cls, pred_box, pred_box_score, None, None
 
     def get_inside_index(self, bbox: torch.Tensor, h: int, w: int):
