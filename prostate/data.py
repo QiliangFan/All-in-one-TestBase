@@ -25,10 +25,10 @@ class Data(Dataset):
         if seg_file is not None:
             seg = sitk.GetArrayFromImage(sitk.ReadImage(seg_file))
             seg = seg[None, :]
-            arr, seg = torch.as_tensor(arr), torch.as_tensor(seg)
+            arr, seg = torch.as_tensor(arr, dtype=torch.float32), torch.as_tensor(seg, dtype=torch.float32)
             return arr, seg
         else:
-            arr = torch.as_tensor(arr)
+            arr = torch.as_tensor(arr, dtype=torch.float32)
             return arr
 
     def __len__(self):
@@ -37,8 +37,10 @@ class Data(Dataset):
 
 class DataModule(LightningDataModule):
 
-    def __init__(self, data_root: str):
+    def __init__(self, data_root: str, batch_size = 2):
         super().__init__()
+
+        self.batch_size = batch_size
 
         arr_files = glob(os.path.join(data_root, "*[0-9].mhd"))
         seg_files = [v.replace(".mhd", "_seg.mhd") for v in arr_files]
@@ -59,9 +61,9 @@ class DataModule(LightningDataModule):
         print(f"stage: {stage}")
 
     def train_dataloader(self):
-        train_data = DataLoader(self.train_data, batch_size=2, shuffle=True, pin_memory=True, num_workers=2)
+        train_data = DataLoader(self.train_data, batch_size=self.batch_size, shuffle=True, pin_memory=True)
         return train_data
 
     def test_dataloader(self):
-        test_data = DataLoader(self.test_data, batch_size=2, pin_memory=True, num_workers=2)
+        test_data = DataLoader(self.test_data, batch_size=self.batch_size, pin_memory=True)
         return test_data
