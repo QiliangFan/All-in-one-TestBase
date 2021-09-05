@@ -11,7 +11,7 @@ class Dice:
         output = output.flatten(start_dim=1)
         target = target.flatten(start_dim=1)
         inter = torch.sum(output * target, dim=1)
-        union = torch.sum(output, dim=1) + torch.sum(target, dim=1)
+        union = torch.sum(output * output, dim=1) + torch.sum(target * target, dim=1)
         return (2 * inter / union.clamp(1e-6)).mean(dim=0)
     
 

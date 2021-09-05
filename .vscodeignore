@@ -1,5 +1,5 @@
 **/__pycache__/
-**/ckpt/
-**/lightning_logs/
+**/ckpt/**
+**/lightning_logs/**
 .git/
 .vscode/
