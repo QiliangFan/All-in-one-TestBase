@@ -37,7 +37,7 @@ class Data(Dataset):
 
 class DataModule(LightningDataModule):
 
-    def __init__(self, data_root: str, batch_size = 2):
+    def __init__(self, data_root: str, fold_num: int, batch_size = 2):
         super().__init__()
 
         self.batch_size = batch_size
@@ -49,10 +49,15 @@ class DataModule(LightningDataModule):
         length = len(arr_files)
         test_len = length // 10
         train_len = length - test_len
-        
-        data = Data(arr_files, seg_files)
 
-        self.train_data, self.test_data = random_split(data, [train_len, test_len])
+        test_arrs = arr_files[(fold_num * test_len):((fold_num + 1) * test_len)]
+        test_segs = seg_files[(fold_num * test_len):((fold_num + 1) * test_len)]
+
+        train_arrs = list(filter(lambda v: v not in test_arrs, arr_files))
+        train_segs = list(filter(lambda v: v not in test_segs, seg_files))
+        
+        self.train_data, self.test_data = Data(train_arrs, train_segs), Data(test_arrs, test_segs)
+
 
     def prepare_data(self):
         pass

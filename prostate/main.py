@@ -15,24 +15,29 @@ def weights_init(m):
         nn.init.constant_(m.bias.data, 0)
 
 
-def main():
-    data_module = DataModule(data_root, batch_size=4)
+def main(fold_num = 1):
+    dices = []
+    for fold in range(fold_num):
+        data_module = DataModule(data_root, fold_num=fold, batch_size=4)
 
-    net = Net()
-    net.apply(weights_init)
+        net = Net()
+        net.apply(weights_init)
 
-    ckpt_model = ModelCheckpoint(dirpath="ckpt", save_weights_only=True, filename="net", monitor="dice", mode="max")
-    trainer = Trainer(gpus=1, max_epochs=5000, callbacks=[ckpt_model], log_every_n_steps=1, benchmark=True)
+        ckpt_model = ModelCheckpoint(dirpath="ckpt", save_weights_only=True, filename=f"net-fold-{fold}", monitor="dice", mode="max")
+        trainer = Trainer(gpus=1, max_epochs=1, callbacks=[ckpt_model], log_every_n_steps=1, benchmark=True)
 
+        # net.load_state_dict(torch.load("ckpt/net-v1.ckpt")["state_dict"])
+        trainer.fit(net, datamodule=data_module)
 
-    net.load_state_dict(torch.load("ckpt/net.ckpt")["state_dict"])
-    trainer.fit(net, datamodule=data_module)
+        trainer.test(net, datamodule=data_module)
 
-    trainer.test(net, datamodule=data_module)
+        dices.append(trainer.logged_metrics["dice"])
+    
+    print(dices)
 
 
 if __name__ == "__main__":
     config = yaml.load(open("config.yaml", "r"), Loader=yaml.FullLoader)
     data_root = config["processed"]["train"]
 
-    main()
+    main(10)

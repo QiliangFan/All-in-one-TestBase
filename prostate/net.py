@@ -152,7 +152,7 @@ class Net(LightningModule):
     def configure_optimizers(self):
         optim = Adam(self.parameters(), lr=1e-3, weight_decay=1e-6)
         # lr_sche = StepLR(optim, step_size=10, gamma=0.9)
-        lr_sche = lr_scheduler.MultiStepLR(optim, milestones=[30, 60, 90, 120, 150, 180], gamma=0.5)
+        lr_sche = lr_scheduler.MultiStepLR(optim, milestones=[2500, 3000, 3500, 4000, 4500, 5000], gamma=0.5)
         return {
             "optimizer": optim,
             # "lr_scheduler": {
@@ -171,13 +171,16 @@ class Net(LightningModule):
         self.log_dict({
             "dice": dice
         }, prog_bar=True, on_epoch=False, on_step=True)
-        # if self.trainer.current_epoch < 50:
-        #     loss = self.ce_loss(out, target) + self.dice_loss(out, target)
-        # else:
-        #     loss = self.dice_loss(out, target)
-        # loss = self.ce_loss(out, target)
-        # loss = self.dice_loss(out, target)
-        # cur_epoch = self.trainer.current_epoch
+        
+        loss = self.dice_loss(out, target)
+        cur_epoch = self.trainer.current_epoch
+
+        if cur_epoch <= 1000:
+            loss = self.dice_loss(out, target)
+        elif cur_epoch <= 2000:
+            loss = self.ce_loss(out, target)
+        else:
+            loss = self.ce_loss(out, target) + self.dice_loss(out, target)
         # if cur_epoch < 200:
         #     ce_co, dice_co = 0.2, 1
         # elif 200 <= cur_epoch < 400:
@@ -186,7 +189,7 @@ class Net(LightningModule):
         #     ce_co, dice_co = 2, 1
 
         # loss = ce_co * self.ce_loss(out, target) + dice_co * self.dice_loss(out, target)
-        loss = self.ce_loss(out, target) + self.dice_loss(out, target)
+        # loss = self.ce_loss(out, target) + self.dice_loss(out, target)
 
         # return dice_loss
         return loss
