@@ -133,9 +133,12 @@ class UNet(nn.Module):
 
 class Net(LightningModule):
 
-    def __init__(self):
+    def __init__(self, visdom=True):
         super().__init__()
-        self.vis = Visdom(port=8888)
+        if visdom:
+            self.vis = Visdom(port=8888)
+        else:
+            self.vis = None
 
         self.unet = UNet()
         # self.unet = UNet(visdom=self.vis)
@@ -145,21 +148,47 @@ class Net(LightningModule):
         self.dice_loss = DiceLoss()
         self.ce_loss = nn.BCEWithLogitsLoss()
 
+        self.lr = 1e-3
 
     def forward(self, x):
         return self.unet(x)
     
     def configure_optimizers(self):
-        optim = Adam(self.parameters(), lr=1e-3, weight_decay=1e-6)
+        optim = Adam(self.parameters(), lr=self.lr, weight_decay=1e-6)
         # lr_sche = StepLR(optim, step_size=10, gamma=0.9)
-        lr_sche = lr_scheduler.MultiStepLR(optim, milestones=[2500, 3000, 3500, 4000, 4500, 5000], gamma=0.5)
+        lr_sche = lr_scheduler.StepLR(optim, 100, gamma=0.5)
         return {
             "optimizer": optim,
-            # "lr_scheduler": {
-            #     "scheduler": lr_sche,
-            #     "monitor": "dice"
-            # }
+            "lr_scheduler": {
+                "scheduler": lr_sche,
+                "monitor": "dice"
+            }
         }
+
+    def optimizer_step(
+        self,
+        epoch: int,
+        batch_idx: int,
+        optimizer,
+        optimizer_idx,
+        optimizer_closure,
+        on_tpu=False,
+        using_native_amp=False,
+        using_lbfgs=False,
+    ):
+        # warm up
+        if self.trainer.global_step < 500:
+            lr_scale = min(1.0, float(self.trainer.global_step + 1) / 500.0)
+            for pg in optimizer.param_groups:
+                pg["lr"] = lr_scale * self.lr
+        
+        # lr reduce
+        if self.trainer.current_epoch % 1000 == 0:
+            for pg in optimizer.param_groups:
+                pg["lr"] = self.lr
+
+        optimizer.step(closure=optimizer_closure)
+            
 
     def training_step(self, batch, batch_idx):
         arr, target = batch
@@ -169,7 +198,8 @@ class Net(LightningModule):
             # self.show_out(arr, "arr")
         dice = self.dice(out, target)
         self.log_dict({
-            "dice": dice
+            "dice": dice,
+            "lr": self.optimizers().param_groups[0]['lr']
         }, prog_bar=True, on_epoch=False, on_step=True)
         
         loss = self.dice_loss(out, target)
@@ -179,19 +209,11 @@ class Net(LightningModule):
             loss = self.dice_loss(out, target)
         elif cur_epoch <= 2000:
             loss = self.ce_loss(out, target)
+        elif cur_epoch <= 3000:
+            loss = self.dice_loss(out, target)
         else:
             loss = self.ce_loss(out, target) + self.dice_loss(out, target)
-        # if cur_epoch < 200:
-        #     ce_co, dice_co = 0.2, 1
-        # elif 200 <= cur_epoch < 400:
-        #     ce_co, dice_co = 1, 1
-        # else:
-        #     ce_co, dice_co = 2, 1
 
-        # loss = ce_co * self.ce_loss(out, target) + dice_co * self.dice_loss(out, target)
-        # loss = self.ce_loss(out, target) + self.dice_loss(out, target)
-
-        # return dice_loss
         return loss
 
     def test_step(self, batch, batch_idx):
@@ -205,6 +227,8 @@ class Net(LightningModule):
 
     @torch.no_grad()
     def show_out(self, out, name = "out"):
+        if self.vis is None:
+            return
         for i, arr in enumerate(out):
             arr = cast(torch.Tensor, arr)
             arr = arr.squeeze(dim=0).cpu().detach().numpy()

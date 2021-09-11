@@ -1,11 +1,11 @@
 input:
   train:
-    - /home/medical/fanqiliang/data/Prostate/TrainingData_Part1
-    - /home/medical/fanqiliang/data/Prostate/TrainingData_Part2
-    - /home/medical/fanqiliang/data/Prostate/TrainingData_Part3
+    - /home/fanqiliang/data/Prostate/TrainingData_Part1
+    - /home/fanqiliang/data/Prostate/TrainingData_Part2
+    - /home/fanqiliang/data/Prostate/TrainingData_Part3
   test:
-    - /home/medical/fanqiliang/data/Prostate/TestData
+    - /home/fanqiliang/data/Prostate/TestData
 
 processed:
-  train: /home/medical/fanqiliang/processed_data/train
-  test: /home/medical/fanqiliang/processed_data/test
+  train: /home/fanqiliang/processed_data/train
+  test: /home/fanqiliang/processed_data/test
