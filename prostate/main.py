@@ -1,5 +1,5 @@
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint
@@ -29,8 +29,9 @@ def main(fold_num = 1):
         ckpt_model = ModelCheckpoint(dirpath="ckpt", save_weights_only=True, filename=f"net-fold-{fold}", monitor="dice", mode="max")
         trainer = Trainer(gpus=1, max_epochs=7000, callbacks=[ckpt_model], log_every_n_steps=1, benchmark=True)
 
-        # net.load_state_dict(torch.load("ckpt/net-v1.ckpt")["state_dict"])
-        trainer.fit(net, datamodule=data_module)
+        if os.path.exists(f"ckpt/net-fold-{fold}.ckpt"):
+            net.load_state_dict(torch.load(f"ckpt/net-fold-{fold}.ckpt")["state_dict"])
+        # trainer.fit(net, datamodule=data_module)
 
         trainer.test(net, datamodule=data_module)
 
