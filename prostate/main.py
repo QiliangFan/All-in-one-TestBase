@@ -27,11 +27,11 @@ def main(fold_num = 1):
         net.apply(weights_init)
 
         ckpt_model = ModelCheckpoint(dirpath="ckpt", save_weights_only=True, filename=f"net-fold-{fold}", monitor="dice", mode="max")
-        trainer = Trainer(gpus=1, max_epochs=7000, callbacks=[ckpt_model], log_every_n_steps=1, benchmark=True)
+        trainer = Trainer(gpus=1, max_epochs=7000, callbacks=[ckpt_model], benchmark=True)
 
-        if os.path.exists(f"ckpt/net-fold-{fold}.ckpt"):
-            net.load_state_dict(torch.load(f"ckpt/net-fold-{fold}.ckpt")["state_dict"])
-        # trainer.fit(net, datamodule=data_module)
+        # if os.path.exists(f"ckpt/net-fold-{fold}.ckpt"):
+        #     net.load_state_dict(torch.load(f"ckpt/net-fold-{fold}.ckpt")["state_dict"])
+        trainer.fit(net, datamodule=data_module)
 
         trainer.test(net, datamodule=data_module)
 
