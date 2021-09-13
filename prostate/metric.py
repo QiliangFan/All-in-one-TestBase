@@ -25,3 +25,19 @@ class DiceLoss(nn.Module):
     def forward(self, output: torch.Tensor, target: torch.Tensor):
         dice = self.dice(output, target)
         return 1 - dice
+
+
+class HoleLoss(nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+        self.dice = DiceLoss()
+        self.bce = nn.BCELoss()
+
+    def forward(self, output: torch.Tensor, target: torch.Tensor):
+        dice_mask = target.detach()
+        bce_mask = 1 - dice_mask.detach()
+
+        loss = self.dice(dice_mask * output, dice_mask * target) + self.bce(bce_mask * output, bce_mask * target)
+        return loss
