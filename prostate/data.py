@@ -66,9 +66,9 @@ class DataModule(LightningDataModule):
         print(f"stage: {stage}")
 
     def train_dataloader(self):
-        train_data = DataLoader(self.train_data, batch_size=self.batch_size, shuffle=True, pin_memory=True, num_workers=4)
+        train_data = DataLoader(self.train_data, batch_size=self.batch_size, shuffle=True, pin_memory=True)
         return train_data
 
     def test_dataloader(self):
-        test_data = DataLoader(self.test_data, batch_size=self.batch_size, pin_memory=True, num_workers=4)
+        test_data = DataLoader(self.test_data, batch_size=self.batch_size, pin_memory=True)
         return test_data

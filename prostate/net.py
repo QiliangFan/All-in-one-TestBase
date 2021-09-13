@@ -157,12 +157,12 @@ class Net(LightningModule):
         optim = Adam(self.parameters(), lr=self.lr, weight_decay=1e-6)
         # lr_sche = StepLR(optim, step_size=10, gamma=0.9)
         # lr_sche = lr_scheduler.StepLR(optim, 100, gamma=0.5)
-        lr_sche = lr_scheduler.ReduceLROnPlateau(optim, mode="min")
+        lr_sche = lr_scheduler.ReduceLROnPlateau(optim, mode="max", factor=0.9, patience=20)
         return {
             "optimizer": optim,
             "lr_scheduler": {
                 "scheduler": lr_sche,
-                "monitor": "loss"
+                "monitor": "dice"
             }
         }
 
@@ -178,8 +178,8 @@ class Net(LightningModule):
         using_lbfgs=False,
     ):
         # warm up
-        if self.trainer.global_step < 500:
-            lr_scale = min(1.0, float(self.trainer.global_step + 1) / 500.0)
+        if self.trainer.global_step < 200:
+            lr_scale = min(1.0, float(self.trainer.global_step + 1) / 200.0)
             for pg in optimizer.param_groups:
                 pg["lr"] = lr_scale * self.lr
         
@@ -198,12 +198,7 @@ class Net(LightningModule):
             self.show_out(out)
             # self.show_out(arr, "arr")
         dice = self.dice(out, target)
-        self.log_dict({
-            "dice": dice,
-            "lr": self.optimizers().param_groups[0]['lr']
-        }, prog_bar=True, on_epoch=False, on_step=True)
         
-        loss = self.dice_loss(out, target)
         cur_epoch = self.trainer.current_epoch
 
         if cur_epoch <= 1000:
@@ -212,6 +207,11 @@ class Net(LightningModule):
             loss = self.ce_loss(out, target)
         else:
             loss = self.ce_loss(out, target) + self.dice_loss(out, target)
+
+        self.log_dict({
+            "dice": dice,
+            "lr": self.optimizers().param_groups[0]['lr']
+        }, prog_bar=True, on_epoch=False, on_step=True)
 
         return loss
 
