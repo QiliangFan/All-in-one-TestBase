@@ -156,12 +156,13 @@ class Net(LightningModule):
     def configure_optimizers(self):
         optim = Adam(self.parameters(), lr=self.lr, weight_decay=1e-6)
         # lr_sche = StepLR(optim, step_size=10, gamma=0.9)
-        lr_sche = lr_scheduler.StepLR(optim, 100, gamma=0.5)
+        # lr_sche = lr_scheduler.StepLR(optim, 100, gamma=0.5)
+        lr_sche = lr_scheduler.ReduceLROnPlateau(optim, mode="min")
         return {
             "optimizer": optim,
             "lr_scheduler": {
                 "scheduler": lr_sche,
-                "monitor": "dice"
+                "monitor": "loss"
             }
         }
 
@@ -183,7 +184,7 @@ class Net(LightningModule):
                 pg["lr"] = lr_scale * self.lr
         
         # lr reduce
-        if self.trainer.current_epoch % 1000 == 0:
+        if self.trainer.current_epoch % 1000 == 0 and self.trainer.current_epoch <= 2000:
             for pg in optimizer.param_groups:
                 pg["lr"] = self.lr
 
@@ -209,8 +210,6 @@ class Net(LightningModule):
             loss = self.dice_loss(out, target)
         elif cur_epoch <= 2000:
             loss = self.ce_loss(out, target)
-        elif cur_epoch <= 3000:
-            loss = self.dice_loss(out, target)
         else:
             loss = self.ce_loss(out, target) + self.dice_loss(out, target)
 
