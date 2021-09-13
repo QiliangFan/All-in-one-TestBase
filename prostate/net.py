@@ -155,7 +155,7 @@ class Net(LightningModule):
     def configure_optimizers(self):
         optim = Adam(self.parameters(), lr=self.lr, weight_decay=1e-6)
         # lr_sche = StepLR(optim, step_size=10, gamma=0.9)
-        lr_sche = lr_scheduler.StepLR(optim, 100, gamma=0.5)
+        lr_sche = lr_scheduler.StepLR(optim, 100, gamma=0.9)
         return {
             "optimizer": optim,
             "lr_scheduler": {
