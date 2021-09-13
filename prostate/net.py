@@ -133,8 +133,10 @@ class UNet(nn.Module):
 
 class Net(LightningModule):
 
-    def __init__(self, visdom=True):
+    def __init__(self, visdom=True, losses=["dice"]):
         super().__init__()
+
+        self.losses = losses
         if visdom:
             self.vis = Visdom(port=8888)
         else:
@@ -156,7 +158,7 @@ class Net(LightningModule):
     def configure_optimizers(self):
         optim = Adam(self.parameters(), lr=self.lr, weight_decay=1e-6)
         # lr_sche = StepLR(optim, step_size=10, gamma=0.9)
-        lr_sche = lr_scheduler.StepLR(optim, 100, gamma=0.5)
+        lr_sche = lr_scheduler.StepLR(optim, 100, gamma=0.9)
         return {
             "optimizer": optim,
             "lr_scheduler": {
@@ -177,15 +179,11 @@ class Net(LightningModule):
         using_lbfgs=False,
     ):
         # warm up
-        if self.trainer.global_step < 500:
-            lr_scale = min(1.0, float(self.trainer.global_step + 1) / 500.0)
+        if self.trainer.global_step < 200:
+            lr_scale = min(1.0, float(self.trainer.global_step + 1) / 200.0)
             for pg in optimizer.param_groups:
                 pg["lr"] = lr_scale * self.lr
-        
-        # lr reduce
-        if self.trainer.current_epoch % 1000 == 0:
-            for pg in optimizer.param_groups:
-                pg["lr"] = self.lr
+    
 
         optimizer.step(closure=optimizer_closure)
             
@@ -205,15 +203,17 @@ class Net(LightningModule):
         loss = self.dice_loss(out, target)
         cur_epoch = self.trainer.current_epoch
 
-        if cur_epoch <= 1000:
-            loss = self.dice_loss(out, target)
-        elif cur_epoch <= 2000:
-            loss = self.ce_loss(out, target)
-        elif cur_epoch <= 3000:
-            loss = self.dice_loss(out, target)
+        if len(self.losses) == 1:
+            if "dice" in self.losses:
+                loss = self.dice_loss(out, target)
+            elif "bce" in self.losses:
+                loss = self.ce_loss(out, target)
         else:
-            loss = self.ce_loss(out, target) + self.dice_loss(out, target)
-
+            # at least dice exist
+            assert "dice" in self.losses
+            loss = self.dice_loss(out, target)
+            if "bce" in self.losses:
+                loss += self.ce_loss(out, target)
         return loss
 
     def test_step(self, batch, batch_idx):

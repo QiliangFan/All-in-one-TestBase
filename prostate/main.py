@@ -1,4 +1,6 @@
 import os
+
+from torch.nn.modules import loss
 os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 from pytorch_lightning import Trainer
@@ -22,16 +24,34 @@ def main(fold_num = 1):
     dices = []
     for fold in range(fold_num):
         data_module = DataModule(data_root, fold_num=fold, batch_size=4)
+        dice_ckpt = f"net-fold-{fold}-dice"
+        bce_ckpt = f"net-fold-{fold}-bce"
+        final_ckpt = f"net-fold-{fold}-final"
 
-        net = Net(visdom=False)
+        # dice
+        net = Net(visdom=False, losses=["dice"])
         net.apply(weights_init)
+        ckpt_model = ModelCheckpoint(dirpath="ckpt", save_weights_only=True, filename=dice_ckpt, monitor="dice", mode="max")
+        trainer = Trainer(gpus=1, max_epochs=1000, callbacks=[ckpt_model], log_every_n_steps=1, benchmark=True)
+        if not os.path.exists(f"ckpt/{dice_ckpt}.ckpt"):
+            trainer.fit(net, datamodule=data_module)
 
-        ckpt_model = ModelCheckpoint(dirpath="ckpt", save_weights_only=True, filename=f"net-fold-{fold}", monitor="dice", mode="max")
-        trainer = Trainer(gpus=1, max_epochs=7000, callbacks=[ckpt_model], log_every_n_steps=1, benchmark=True)
+        # bce
+        net = Net(visdom=False, losses=["bce"])
+        net.load_state_dict(torch.load(f"ckpt/{dice_ckpt}.ckpt")["state_dict"])
+        ckpt_model = ModelCheckpoint(dirpath="ckpt", save_weights_only=True, filename=bce_ckpt, monitor="dice", mode="max")
+        trainer = Trainer(gpus=1, max_epochs=1000, callbacks=[ckpt_model], log_every_n_steps=1, benchmark=True)
+        if not os.path.exists(f"ckpt/{bce_ckpt}.ckpt"):
+            trainer.fit(net, datamodule=data_module)
 
-        # net.load_state_dict(torch.load("ckpt/net-v1.ckpt")["state_dict"])
-        trainer.fit(net, datamodule=data_module)
-
+        # dice + bce
+        net = Net(visdom=False, losses=["dice", "bce"])
+        net.load_state_dict(torch.load(f"ckpt/{bce_ckpt}.ckpt")["state_dict"])
+        ckpt_model = ModelCheckpoint(dirpath="ckpt", save_weights_only=True, filename=final_ckpt, monitor="dice", mode="max")
+        trainer = Trainer(gpus=1, max_epochs=3000, callbacks=[ckpt_model], log_every_n_steps=1, benchmark=True)
+        if not os.path.exists(f"ckpt/{final_ckpt}.ckpt"):
+            trainer.fit(net, datamodule=data_module)
+            
         trainer.test(net, datamodule=data_module)
 
         dices.append(trainer.logged_metrics["dice"])
