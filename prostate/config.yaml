@@ -7,5 +7,5 @@ input:
     - /home/fanqiliang/data/Prostate/TestData
 
 processed:
-  train: /home/fanqiliang/processed_data/train
-  test: /home/fanqiliang/processed_data/test
+  train: /home/fanrui/fanqiliang/processed_data/train
+  test: /home/fanrui/fanqiliang/processed_data/test

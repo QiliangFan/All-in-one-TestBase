@@ -4,7 +4,7 @@ from torch.optim import lr_scheduler
 import torch
 from torch import nn
 from torch.optim import Adam, SGD
-from metric import Dice, DiceLoss
+from metric import Dice, DiceLoss, HoleLoss
 from visdom import Visdom
 
 def conv_block(in_channel, channel, kernel_size=3, stride=1, padding=1, relu=True):
@@ -145,8 +145,7 @@ class Net(LightningModule):
 
         self.dice = Dice()
 
-        self.dice_loss = DiceLoss()
-        self.ce_loss = nn.BCEWithLogitsLoss()
+        self.hole_loss = HoleLoss()
 
         self.lr = 1e-3
 
@@ -181,11 +180,6 @@ class Net(LightningModule):
             lr_scale = min(1.0, float(self.trainer.global_step + 1) / 500.0)
             for pg in optimizer.param_groups:
                 pg["lr"] = lr_scale * self.lr
-        
-        # lr reduce
-        if self.trainer.current_epoch % 1000 == 0:
-            for pg in optimizer.param_groups:
-                pg["lr"] = self.lr
 
         optimizer.step(closure=optimizer_closure)
             
@@ -202,17 +196,8 @@ class Net(LightningModule):
             "lr": self.optimizers().param_groups[0]['lr']
         }, prog_bar=True, on_epoch=False, on_step=True)
         
-        loss = self.dice_loss(out, target)
+        loss = self.hole_loss(out, target)
         cur_epoch = self.trainer.current_epoch
-
-        if cur_epoch <= 1000:
-            loss = self.dice_loss(out, target)
-        elif cur_epoch <= 2000:
-            loss = self.ce_loss(out, target)
-        elif cur_epoch <= 3000:
-            loss = self.dice_loss(out, target)
-        else:
-            loss = self.ce_loss(out, target) + self.dice_loss(out, target)
 
         return loss
 
