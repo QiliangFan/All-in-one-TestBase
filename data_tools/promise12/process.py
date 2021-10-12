@@ -6,12 +6,14 @@ import numpy as np
 from multiprocessing import Pool
 import matplotlib.pyplot as plt
 
-train_root = r"D:\dataset\promise2012\TrainData"
-# output_root = r"D:\dataset\promise2012\0scaled_data"
-# img_output = r"D:\dataset\promise2012\images"
-output_root = r"D:\dataset\promise2012\1corrected_data"
-img_output = r"D:\dataset\promise2012\corrected_images"
+train_root = "/home/lisiyi/data/Prostate/TrainData"
+output_root = "/home/lisiyi/processed_data0scaled_data"
+# output_root = r"/home/lisiyi/processed_data/1corrected_data"
+
+
+# img_output = r"D:\dataset\promise2012\corrected_images"
 # seg_output = r"D:\dataset\promise2012\seg_images"
+# img_output = r"D:\dataset\promise2012\images"
 
 
 
@@ -48,13 +50,13 @@ def process(idx, file, seg):
     # seg_arr = zoom(seg_arr, (64 / seg_arr.shape[0], 128 / seg_arr.shape[1], 128 / seg_arr.shape[2]), mode='nearest')
     # seg_arr = np.where(seg_arr > 0.5, 1, 0).astype(int)
 
-    for i, slice in enumerate(arr):
-        fig = plt.figure()
-        plt.axis("off")
-        plt.imshow(slice)
-        # plt.savefig(os.path.join(img_output, f"{os.path.splitext(os.path.basename(file))[0]}_{i}.png"), bbox_inches="tight")
-        plt.savefig(os.path.join(img_output, f"{idx}_{i}.png"), bbox_inches="tight")
-        plt.close(fig)
+    # for i, slice in enumerate(arr):
+    #     fig = plt.figure()
+    #     plt.axis("off")
+    #     plt.imshow(slice)
+    #     # plt.savefig(os.path.join(img_output, f"{os.path.splitext(os.path.basename(file))[0]}_{i}.png"), bbox_inches="tight")
+    #     plt.savefig(os.path.join(img_output, f"{idx}_{i}.png"), bbox_inches="tight")
+    #     plt.close(fig)
 
     # arr = (arr - arr[arr > 0].mean()) / arr[arr > 0].std()
 

@@ -7,9 +7,9 @@ from multiprocessing import Pool
 import matplotlib.pyplot as plt
 from nyul import nyul_train_standard_scale, nyul_apply_standard_scale
 
-train_root = r"D:\dataset\promise2012\1corrected_data"
-output_root = r"D:\dataset\promise2012\2normalized_data"
-img_output = r"D:\dataset\promise2012\normalized_images"
+train_root = "/home/lisiyi/processed_data/1corrected_data"
+output_root = "/home/lisiyi/processed_data/2normalized_data"
+# img_output = r"D:\dataset\promise2012\normalized_images"
 
 
 def normalize():
@@ -23,12 +23,12 @@ def normalize():
         image = sitk.GetArrayFromImage(sitk.ReadImage(mr))
         image_norm = nyul_apply_standard_scale(image, "standard_hist.npy")
 
-        for i, slice in enumerate(image_norm):
-            plt.figure()
-            plt.axis("off")
-            plt.imshow(slice, cmap="bone")
-            plt.savefig(f"{img_output}/{idx}_{i}.png", bbox_inches="tight")
-            plt.close()
+        # for i, slice in enumerate(image_norm):
+        #     plt.figure()
+        #     plt.axis("off")
+        #     plt.imshow(slice, cmap="bone")
+        #     plt.savefig(f"{img_output}/{idx}_{i}.png", bbox_inches="tight")
+        #     plt.close()
 
         sitk.WriteImage(sitk.GetImageFromArray(image_norm), os.path.join(output_root, f"{idx}.mhd"))
         sitk.WriteImage(sitk.ReadImage(seg), os.path.join(output_root, f"{idx}_seg.mhd"))
