@@ -18,7 +18,7 @@ train_root = "/home/fanqiliang/data/TrainData"
 output_root = "/home/fanqiliang/data/processed_data/3denoised_data"
 
 dst_size = np.asarray([128, 128, 64], dtype=np.float32)
-dst_sp = np.asarray([1, 1, 1.5], dtype=np.float32)
+dst_sp = np.asarray([1, 1, 1.5], dtype=np.float64)
 
 def vnet_preprocess(img):
     space = np.asarray(img.GetSpacing())
