@@ -21,6 +21,9 @@ def do(file: str):
     corrector = sitk.N4BiasFieldCorrectionImageFilter()
     corrector.SetMaximumNumberOfIterations([50] * 8)
     img = corrector.Execute(img, mask_img)
+
+    space = img.GetSpacing()
+    shape = img.GetSize()
     
     arr = sitk.GetArrayFromImage(img)
 
@@ -32,14 +35,24 @@ def do(file: str):
 
     resampler = sitk.ResampleImageFilter()
     resampler.SetReferenceImage(img)
+    resampler.SetOutputSpacing(
+        [
+            space[0] * shape[0] / 128, 
+            space[1] * shape[1] / 128, 
+            space[2] * shape[2] / (z_size+1)
+        ]
+    )
     resampler.SetSize((128, 128, (z_size+1)))
 
-    img = resampler.Execute(img)
+    img: sitk.Image = resampler.Execute(img)
     arr = sitk.GetArrayFromImage(img)[:-1]
 
     arr = (arr - arr.min()) / (arr.max() - arr.min())
     
-    sitk.WriteImage(sitk.GetImageFromArray(arr), output_file)
+    output_img = sitk.GetImageFromArray(arr)
+    output_img.SetDirection(img.GetDirection())
+    output_img.SetSpacing(img.GetSpacing())
+    sitk.WriteImage(output_img, output_file)
     print(file)
     return file
 
