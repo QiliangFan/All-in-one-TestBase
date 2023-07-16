@@ -18,7 +18,7 @@ train_root = "/home/fanqiliang/data/TrainData"
 # output_root = "/home/fanqiliang/data/processed_data/v3" # 单张图片标准化
 # output_root = "/home/fanqiliang/data/processed_data/v4" # 偏域修正 + 单张图片标准化 + 归一化
 # output_root = "/home/fanqiliang/data/processed_data/hist"  # 直方图均衡
-output_root = "/home/fanqiliang/data/processed_data/hist_test_50_8"  # 直方图均衡
+output_root = "/home/fanqiliang/data/processed_data/hist_32"  # 直方图均衡
 
 
 SIZE = 128
@@ -44,7 +44,7 @@ def process(idx, file, seg):
 
     mask_img = sitk.OtsuThreshold(img, 0, 1, 200)
     corrector = sitk.N4BiasFieldCorrectionImageFilter()
-    corrector.SetMaximumNumberOfIterations([50] * 8)
+    corrector.SetMaximumNumberOfIterations([50] * 8)  # https://simpleitk.readthedocs.io/en/release/link_N4BiasFieldCorrection_docs.html
     img = corrector.Execute(img, seg_img)
 
     # 直方图均衡
@@ -65,6 +65,7 @@ def process(idx, file, seg):
         if abs(z_shape - 2 ** i) < abs(z_shape - 2 ** (i+1)):
             z_size = 2 ** i
             break
+    # z_size = 32
     #
     # resample
     #
@@ -114,7 +115,7 @@ if __name__ == "__main__":
     # mean = 281.41382
     # std = 340.0665
 
-    with Pool(8) as pool:
+    with Pool(1) as pool:
         pool.starmap(process, [(idx, file[idx], seg_file[idx]) for idx in range(len(seg_file))])
         pool.close()
         pool.join()
