@@ -18,6 +18,8 @@ def load_origin(tag: str) -> Tuple[Image, Image]:
     origin_data_file = os.path.join(origin_root, "data", f"{tag}.mha")
     label = sitk.ReadImage(origin_label_file)
     data = sitk.ReadImage(origin_data_file)
+    label = sitk.Cast(label, sitk.sitkUInt8)
+    data = sitk.Cast(data, sitk.sitkFloat32)
     return data, label
 
 def process(data: Image, label: Image) -> Tuple[Image, Image]:
@@ -60,7 +62,7 @@ def work(idx, tag):
 
 def main():
     origin_labels = glob(os.path.join(origin_root, "labels", "*.nii.gz"))
-    tags = [path.replace(os.path.join(origin_root, "labels"), "").replace(".nii.gz", "") for path in origin_labels]
+    tags = [path.replace(os.path.join(origin_root, "labels"), "").replace(".nii.gz", "").replace("/", "") for path in origin_labels]
     params = [(idx, tag) for idx, tag in enumerate(tags)]
     with Pool(processes=16) as pool:
         pool.starmap(work, params)
