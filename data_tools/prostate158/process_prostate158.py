@@ -6,16 +6,17 @@ from typing import Tuple
 from glob import glob
 from multiprocessing import Pool
 
-origin_root = "/home/fanqiliang/data/picai_origin"
-dst_root = "/home/fanqiliang/data/picai"
+origin_root = "/home/fanqiliang/data/prostate158_origin/train"
+dst_root = "/home/fanqiliang/data/prostate158"
 if not os.path.exists(dst_root):
     os.makedirs(dst_root)
 
 SIZE = 128
 
-def load_origin(tag: str) -> Tuple[Image, Image]:
-    origin_label_file = os.path.join(origin_root, "labels", f"{tag}.nii.gz")
-    origin_data_file = os.path.join(origin_root, "data", f"{tag}.mha")
+def load_origin(file: str) -> Tuple[Image, Image]:
+    origin_data_file = file
+    origin_label_file = file.replace("t2.nii.gz", "t2_anatomy_reader1.nii.gz")
+
     label = sitk.ReadImage(origin_label_file)
     data = sitk.ReadImage(origin_data_file)
     label = sitk.Cast(label, sitk.sitkUInt8)
@@ -55,22 +56,25 @@ def process(data: Image, label: Image) -> Tuple[Image, Image]:
     seg_arr = np.where(seg_arr > 0.5, 1, 0).astype(int)
     return sitk.GetImageFromArray(arr), sitk.GetImageFromArray(seg_arr)
 
-def work(idx, tag):
+def work(idx, file):
     dst_label_file = os.path.join(dst_root, f"{idx}_seg.mhd")
     dst_data_file = os.path.join(dst_root, f"{idx}.mhd")
-    data, label = load_origin(tag)
+    data, label = load_origin(file)
     data, label = process(data, label)
     sitk.WriteImage(data, dst_data_file)
     sitk.WriteImage(label, dst_label_file)
     print(dst_data_file)
 
 def main():
-    origin_labels = glob(os.path.join(origin_root, "labels", "*.nii.gz"))
-    tags = [path.replace(os.path.join(origin_root, "labels"), "").replace(".nii.gz", "").replace("/", "") for path in origin_labels]
-    params = [(idx, tag) for idx, tag in enumerate(tags)]
+    origins = glob(os.path.join(origin_root, "*", "t2.nii.gz"))
+    params = [(idx, file) for idx, file in enumerate(origins)]
     with Pool(processes=4) as pool:
         pool.starmap(work, params)
         
+
+if __name__ == "__main__":
+    main()
+
 
 if __name__ == "__main__":
     main()
